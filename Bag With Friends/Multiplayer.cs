@@ -67,6 +67,7 @@ namespace Bag_With_Friends
 
         long lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         long myPing = 0;
+        long lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         public void Connect()
         {
@@ -78,7 +79,7 @@ namespace Bag_With_Friends
                 JsonDocument doc = JsonDocument.Parse(e.Data);
                 JsonElement res = doc.RootElement;
 
-                if (res.GetProperty("data").GetString() != "updatePlayerPosition" && res.GetProperty("data").GetString() != "pong" && debugMode)
+                if (res.GetProperty("data").GetString() != "updatePlayerPosition" && res.GetProperty("data").GetString() != "pong" && res.GetProperty("data").GetString() != "updatePlayerPing" && debugMode)
                 {
                     LoggerInstance.Msg("got message " + res.GetProperty("data").GetString());
                 }
@@ -92,7 +93,6 @@ namespace Bag_With_Friends
                     case "pong":
                         myPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - lastPing;
                         lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                        ws.Send($"{{\"data\":\"ping\", \"id\":{playerId}, \"ping\":{lastPing}}}");
                         break;
 
                     case "error":
@@ -368,7 +368,11 @@ namespace Bag_With_Friends
             joinButton.image = joinBG;
             joinButton.onClick.AddListener(() =>
             {
-                ws.Send($"{{\"data\":\"getRooms\"}}");
+                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 5000)
+                {
+                    lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    ws.Send($"{{\"data\":\"getRooms\"}}");
+                }
             });
 
             GameObject refreshTextOb = new GameObject("Refresh");
@@ -382,7 +386,7 @@ namespace Bag_With_Friends
             refreshText.color = Color.black;
             refreshText.rectTransform.sizeDelta = new Vector2(200, 50);
 
-            refreshButtonOb.SetActive(false);
+            //refreshButtonOb.SetActive(false);
 
             GameObject roomOb = new GameObject("Room Name");
             roomOb.transform.SetParent(multiplayerMenu.transform);
@@ -471,7 +475,11 @@ namespace Bag_With_Friends
             makeRoom.image = makeBG;
             makeRoom.onClick.AddListener(() =>
             {
-                ws.Send($"{{\"data\":\"makeRoom\", \"id\":{playerId}, \"name\":\"{roomName.text}\", \"pass\":\"{roomName2.text}\"}}");
+                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 5000)
+                {
+                    lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    ws.Send($"{{\"data\":\"makeRoom\", \"id\":{playerId}, \"name\":\"{roomName.text}\", \"pass\":\"{roomName2.text}\"}}");
+                }
             });
 
             GameObject makeRoomTextOb = new GameObject("Make");
@@ -648,6 +656,12 @@ namespace Bag_With_Friends
             }
 
             if (!connected) return;
+
+            if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastPing + 5000)
+            {
+                lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                ws.Send($"{{\"data\":\"ping\", \"id\":{playerId}, \"ping\":{lastPing}}}");
+            }
 
             /*for (int i = shadowPrefabs.Count; i < 10; i++)
             {
