@@ -22,6 +22,7 @@ namespace Bag_With_Friends
     public class Multiplayer : MelonMod
     {
         bool debugMode = false;
+        string server = "bwf.givo.xyz";
 
         System.Random rand = new System.Random();
 
@@ -32,6 +33,7 @@ namespace Bag_With_Friends
         bool inRoom = false;
         bool connected = false;
         bool makingShadowPrefab = false;
+        CursorLockMode mouseOnOpen = CursorLockMode.None;
 
         Font arial;
 
@@ -60,12 +62,13 @@ namespace Bag_With_Friends
         Footplacement meFoots;
         PlayerShadow shadow;
         public GameObject shadowPrefab;
-        public List<GameObject> shadowPrefabs = new List<GameObject>(0);
+        //public List<GameObject> shadowPrefabs = new List<GameObject>(0);
+        public List<Player> shadowPrefabRequests = new List<Player>(0);
 
         public void Connect()
         {
             //ws = new WebSocket("ws://172.234.207.93:3000");
-            ws = new WebSocket("ws://bwf.givo.xyz:3000");
+            ws = new WebSocket($"ws://{server}:3000");
 
             ws.OnMessage += (sender, e) =>
             {
@@ -184,7 +187,7 @@ namespace Bag_With_Friends
                         JsonElement.ArrayEnumerator footRrot = res.GetProperty("footRRotation").EnumerateArray();
                         Quaternion footRRot = new Quaternion(float.Parse(footRrot.ElementAt(0).GetString()), float.Parse(footRrot.ElementAt(1).GetString()), float.Parse(footRrot.ElementAt(2).GetString()), float.Parse(footRrot.ElementAt(3).GetString()));
 
-                        playerToUpdate2.UpdatePosition(bodyPos, handLPos, handRPos, footLPos, footRPos, footLBendPos, footRBendPos, bodyRot, handLRot, handRRot, footLRot, footRRot);
+                        playerToUpdate2.UpdatePosition(bodyPos, handLPos, handRPos, float.Parse(res.GetProperty("armStrechL").GetString()), float.Parse(res.GetProperty("armStrechR").GetString()), footLPos, footRPos, footLBendPos, footRBendPos, bodyRot, handLRot, handRRot, footLRot, footRRot);
                         break;
                 }
             };
@@ -206,7 +209,13 @@ namespace Bag_With_Friends
             for (int i = 1; i < args.Length; i++)
             {
                 if (args[i] == "-bwf-debug")
+                {
                     debugMode = true;
+                } else if (args[i] == "-server" && i + 1 < args.Length)
+                {
+                    server = args[i + 1];
+                }
+
             }
         }
 
@@ -231,13 +240,13 @@ namespace Bag_With_Friends
                 GameObject.DontDestroyOnLoad(shadowPrefab);
                 shadowPrefab.transform.position = new Vector3(0, -1000000, 0);
 
-                for (int i = 0; i < 10; i++)
+                /*for (int i = 0; i < 10; i++)
                 {
                     shadowPrefabs.Add(GameObject.Instantiate(shadowPrefab));
                     GameObject.Destroy(shadowPrefabs[i].GetComponent<PlayerShadow>());
                     GameObject.DontDestroyOnLoad(shadowPrefabs[i]);
                     shadowPrefabs[i].transform.position = new Vector3(0, -1000000, 0);
-                }
+                }*/
             }
 
             AsyncOperation asyncUnload = SceneManager.UnloadSceneAsync(2);
@@ -626,13 +635,23 @@ namespace Bag_With_Friends
 
             if (!connected) return;
 
-            for (int i = shadowPrefabs.Count; i < 10; i++)
+            /*for (int i = shadowPrefabs.Count; i < 10; i++)
             {
                 shadowPrefabs.Add(GameObject.Instantiate(shadowPrefab));
                 GameObject.Destroy(shadowPrefabs[i].GetComponent<PlayerShadow>());
                 GameObject.DontDestroyOnLoad(shadowPrefabs[i]);
                 shadowPrefabs[i].transform.position = new Vector3(0, -1000000, 0);
+            }*/
+
+            for (int i = 0; i < shadowPrefabRequests.Count; i++)
+            {
+                shadowPrefabRequests[i].player = GameObject.Instantiate(shadowPrefab);
+                GameObject.Destroy(shadowPrefabRequests[i].player.GetComponent<PlayerShadow>());
+                GameObject.DontDestroyOnLoad(shadowPrefabRequests[i].player);
+                shadowPrefabRequests[i].player.transform.position = new Vector3(0, -1000000, 0);
+                shadowPrefabRequests[i].MakeBody();
             }
+            shadowPrefabRequests.Clear();
 
             if (mePlayer == null)
             {
@@ -683,6 +702,8 @@ namespace Bag_With_Friends
                     $"\"position\":[\"{shadow.transform.position.x}\",\"{shadow.transform.position.y}\",\"{shadow.transform.position.z}\"], " +
                     $"\"handL\":[\"{shadow.handIK_L.solver.arm.target.position.x}\",\"{shadow.handIK_L.solver.arm.target.position.y}\",\"{shadow.handIK_L.solver.arm.target.position.z}\"], " +
                     $"\"handR\":[\"{shadow.handIK_R.solver.arm.target.position.x}\",\"{shadow.handIK_R.solver.arm.target.position.y}\",\"{shadow.handIK_R.solver.arm.target.position.z}\"], " +
+                    $"\"armStrechL\":\"{shadow.handIK_L.solver.arm.armLengthMlp}\", " +
+                    $"\"armStrechR\":\"{shadow.handIK_R.solver.arm.armLengthMlp}\", " +
                     $"\"footL\":[\"{shadow.footIK_L.solver.target.transform.position.x}\",\"{shadow.footIK_L.solver.target.position.y}\",\"{shadow.footIK_L.solver.target.position.z}\"], " +
                     $"\"footR\":[\"{shadow.footIK_R.solver.target.position.x}\",\"{shadow.footIK_R.solver.target.position.y}\",\"{shadow.footIK_R.solver.target.position.z}\"], " +
                     $"\"footLBend\":[\"{shadow.realleftKnee.transform.position.x}\",\"{shadow.realleftKnee.transform.position.y}\",\"{shadow.realleftKnee.transform.position.z}\"], " +
@@ -700,7 +721,20 @@ namespace Bag_With_Friends
 
             foreach (Player player in playersInRoom)
             {
-                player.body.transform.position = player.bodyPosition;
+                player.handLIK.solver.arm.armLengthMlp = player.armStretchL;
+                player.handRIK.solver.arm.armLengthMlp = player.armStretchR;
+
+                if (player.armStretchL > 1)
+                {
+                    player.handLIK.solver.arm.armLengthMlp = player.armStretchL * 1.3f;
+                }
+
+                if (player.armStretchR > 1)
+                {
+                    player.handRIK.solver.arm.armLengthMlp = player.armStretchR * 1.3f;
+                }
+
+                player.player.transform.position = player.bodyPosition;
                 player.handL.transform.position = player.handLPosition;
                 player.handR.transform.position = player.handRPosition;
                 player.footL.transform.position = player.footLPosition;
@@ -708,14 +742,11 @@ namespace Bag_With_Friends
                 player.footLBend.transform.position = player.footLBendPosition;
                 player.footRBend.transform.position = player.footRBendPosition;
 
-                player.body.transform.rotation = player.bodyRotation;
+                player.player.transform.rotation = player.bodyRotation;
                 player.handL.transform.rotation = player.handLRotation;
                 player.handR.transform.rotation = player.handRRotation;
                 player.footL.transform.rotation = player.footLRotation;
                 player.footR.transform.rotation = player.footRRotation;
-
-                player.player.transform.position = player.bodyPosition;
-                player.player.transform.rotation = player.bodyRotation;
             }
         }
 
@@ -726,8 +757,17 @@ namespace Bag_With_Friends
             if (Input.GetKeyDown(KeyCode.Tab))
             {
                 multiplayerMenu.SetActive(!multiplayerMenu.activeSelf);
-                Cursor.lockState = multiplayerMenu.activeSelf ? CursorLockMode.None : CursorLockMode.Locked;
-                Cursor.visible = multiplayerMenu.activeSelf;
+
+                if (multiplayerMenu.activeSelf)
+                {
+                    mouseOnOpen = Cursor.lockState;
+                } else if (InGameMenu.isCurrentlyNavigationMenu)
+                {
+                    mouseOnOpen = CursorLockMode.None;
+                }
+
+                Cursor.lockState = multiplayerMenu.activeSelf ? CursorLockMode.None : mouseOnOpen;
+                Cursor.visible = multiplayerMenu.activeSelf || mouseOnOpen == CursorLockMode.None ? true : false;
             }
 
             if (Input.GetKeyDown(KeyCode.BackQuote))
@@ -786,6 +826,7 @@ namespace Bag_With_Friends
             LoggerInstance.Msg("Shadow Prefab " + shadowPrefab);
 
             ws.Send($"{{\"data\":\"switchScene\", \"id\":{playerId}, \"scene\":\"{sceneName}\"}}");
+            multiplayerMenu.SetActive(false);
 
             mePlayer = GameObject.Find("Player");
 
@@ -793,12 +834,6 @@ namespace Bag_With_Friends
             if (shads.Length != 0)
             {
                 shadow = shads[0];
-            } else
-            {
-                GameObject shadow = shadowPrefabs[0];
-                shadowPrefabs.RemoveAt(0);
-                SceneManager.MoveGameObjectToScene(shadow, SceneManager.GetActiveScene());
-                shadow.AddComponent<PlayerShadow>();
             }
 
             BodyTurning[] bodyTurns = Resources.FindObjectsOfTypeAll<BodyTurning>();
