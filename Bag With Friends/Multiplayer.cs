@@ -65,6 +65,9 @@ namespace Bag_With_Friends
         //public List<GameObject> shadowPrefabs = new List<GameObject>(0);
         public List<Player> shadowPrefabRequests = new List<Player>(0);
 
+        long lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        long myPing = 0;
+
         public void Connect()
         {
             //ws = new WebSocket("ws://172.234.207.93:3000");
@@ -75,7 +78,7 @@ namespace Bag_With_Friends
                 JsonDocument doc = JsonDocument.Parse(e.Data);
                 JsonElement res = doc.RootElement;
 
-                if (res.GetProperty("data").GetString() != "updatePlayerPosition" && debugMode)
+                if (res.GetProperty("data").GetString() != "updatePlayerPosition" && res.GetProperty("data").GetString() != "pong" && debugMode)
                 {
                     LoggerInstance.Msg("got message " + res.GetProperty("data").GetString());
                 }
@@ -84,6 +87,12 @@ namespace Bag_With_Friends
                 {
                     case "identify":
                         giveInfo();
+                        break;
+
+                    case "pong":
+                        myPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - lastPing;
+                        lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                        ws.Send($"{{\"data\":\"ping\", \"id\":{playerId}, \"ping\":{lastPing}}}");
                         break;
 
                     case "error":
@@ -156,6 +165,11 @@ namespace Bag_With_Friends
                     case "updatePlayerScene":
                         Player playerToUpdate = playerLookup[res.GetProperty("id").GetInt64()];
                         playerToUpdate.ChangeScene(res.GetProperty("scene").GetString());
+                        break;
+
+                    case "updatePlayerPing":
+                        Player playerToUpdate3 = playerLookup[res.GetProperty("id").GetInt64()];
+                        playerToUpdate3.ping = res.GetProperty("ping").GetInt64();
                         break;
 
                     case "updatePlayerPosition":
@@ -874,7 +888,8 @@ namespace Bag_With_Friends
                 playerId = (ulong)LongRandom(0, 100000000000000);
                 playerName = RandomString(10);
             }
-            ws.Send($"{{\"data\":\"identify\", \"id\":{playerId}, \"name\":\"{playerName}\", \"scene\":\"{SceneManager.GetActiveScene().name}\"}}");
+            lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            ws.Send($"{{\"data\":\"identify\", \"id\":{playerId}, \"name\":\"{playerName}\", \"scene\":\"{SceneManager.GetActiveScene().name}\", \"ping\":{lastPing}}}");
             ws.Send($"{{\"data\":\"getRooms\"}}");
         }
 

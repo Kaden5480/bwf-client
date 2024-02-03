@@ -18,6 +18,8 @@ namespace Bag_With_Friends
         public string scene;
         public bool host;
 
+        public long ping = 0;
+
         public GameObject body;
         public GameObject handL;
         public GameObject handR;
