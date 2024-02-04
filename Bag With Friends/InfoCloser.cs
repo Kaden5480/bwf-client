@@ -7,8 +7,8 @@ namespace Bag_With_Friends
     public class InfoCloser : MonoBehaviour
     {
         Text text;
-        float solidTime = 10;
-        float closeTime = 12;
+        float solidTime = 5;
+        float closeTime = 6;
         float timer = 0;
         
         void Start()

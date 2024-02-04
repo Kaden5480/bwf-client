@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 using RootMotion.FinalIK;
 
 namespace Bag_With_Friends
@@ -19,6 +20,7 @@ namespace Bag_With_Friends
         public bool host;
 
         public long ping = 0;
+        public float height = 0;
 
         public GameObject body;
         public GameObject handL;
@@ -52,6 +54,11 @@ namespace Bag_With_Friends
         public AnimationCurve stretchCurve;
         public float armStretchL = 1f;
         public float armStretchR = 1f;
+
+        public Text pingText;
+        public Text nameText;
+        public Text heightText;
+
         public Player(string name, long id, string scene, bool host, Multiplayer manager)
         {
             this.name = name;
@@ -91,7 +98,12 @@ namespace Bag_With_Friends
                 }
             }
 
-            if (scene == meScene && meScene != "Cabin" && meScene != "TitleScene")
+            if (scene == "Cabin" || scene == "TitleScreen")
+            {
+                height = 0;
+            }
+
+            if (scene == meScene && meScene != "Cabin" && meScene != "TitleScreen")
             {
                 manager.shadowPrefabRequests.Add(this);
             }
@@ -118,7 +130,7 @@ namespace Bag_With_Friends
                 skin.material.color = new Color(1, 1, 1, 1);
                 skin.material.shaderKeywords = new string[0] { };
 
-                manager.LoggerInstance.Msg(skin.name);
+                //manager.LoggerInstance.Msg(skin.name);
             }
 
             handL = new GameObject(name + " HandL");
@@ -187,8 +199,10 @@ namespace Bag_With_Friends
             handRIK.fixTransforms = true;
         }
 
-        public void UpdatePosition(Vector3 bodyPosition, Vector3 handLPosition, Vector3 handRPosition, float armStretchL, float armStretchR, Vector3 footLPosition, Vector3 footRPosition, Vector3 footLBendPosition, Vector3 footRBendPosition, Quaternion bodyRotation, Quaternion handLRotation, Quaternion handRRotation, Quaternion footLRotation, Quaternion footRRotation)
+        public void UpdatePosition(Vector3 bodyPosition, float height, Vector3 handLPosition, Vector3 handRPosition, float armStretchL, float armStretchR, Vector3 footLPosition, Vector3 footRPosition, Vector3 footLBendPosition, Vector3 footRBendPosition, Quaternion bodyRotation, Quaternion handLRotation, Quaternion handRRotation, Quaternion footLRotation, Quaternion footRRotation)
         {
+            this.height = height;
+
             if (body != null)
             {
                 this.bodyPosition = bodyPosition;
@@ -230,5 +244,11 @@ namespace Bag_With_Friends
                 GameObject.Destroy(footRBend);
             }
         }
+    }
+
+    public class BannedPlayer
+    {
+        public string name;
+        public long id;
     }
 }

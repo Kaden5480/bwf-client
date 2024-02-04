@@ -29,6 +29,7 @@ namespace Bag_With_Friends
         WebSocket ws;
         ulong playerId;
         string playerName;
+        Player mePlayerPlayer;
         bool amHost = false;
         bool inRoom = false;
         bool connected = false;
@@ -40,11 +41,20 @@ namespace Bag_With_Friends
         GameObject multiplayerMenuObject;
         Canvas multiplayerMenuCanvas;
         GameObject multiplayerMenu;
+        GameObject roomMenu;
         GraphicRaycaster multiplayerRaycaster;
         GameObject roomContainer;
+        GameObject playerMenuContainer;
 
         GameObject updateContainer;
         Image roomBack;
+        Image playerBack;
+
+        Text roomMenuRoomName;
+        Text roomMenuRoomPass;
+        InputField roomMenuName;
+        InputField roomMenuPass;
+        UnityEngine.UI.Button roomMenuUpdate;
 
         AssetBundle UIBundle;
         System.Reflection.Assembly thisAssembly;
@@ -55,6 +65,8 @@ namespace Bag_With_Friends
         List<Player> playersInRoom = new List<Player>(0);
         Dictionary<long, Player> playerLookup = new Dictionary<long, Player>(0);
         public GameObject playerContainer;
+        public Dictionary<string, Transform> sceneSplitters = new Dictionary<string, Transform>(0);
+        Dictionary<long, GameObject> playerListingLookup = new Dictionary<long, GameObject>(0);
 
         GameObject mePlayer;
         BodyTurning meBodyTurning;
@@ -64,6 +76,7 @@ namespace Bag_With_Friends
         public GameObject shadowPrefab;
         //public List<GameObject> shadowPrefabs = new List<GameObject>(0);
         public List<Player> shadowPrefabRequests = new List<Player>(0);
+        public List<Player> bannedPlayers = new List<Player>(0);
 
         long lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         long myPing = 0;
@@ -71,7 +84,7 @@ namespace Bag_With_Friends
 
         public void Connect()
         {
-            //ws = new WebSocket("ws://172.234.207.93:3000");
+            //ws = new WebSocket("ws://bwf.givo.xyz:3000");
             ws = new WebSocket($"ws://{server}:3000");
 
             ws.OnMessage += (sender, e) =>
@@ -82,6 +95,7 @@ namespace Bag_With_Friends
                 if (res.GetProperty("data").GetString() != "updatePlayerPosition" && res.GetProperty("data").GetString() != "pong" && res.GetProperty("data").GetString() != "updatePlayerPing" && debugMode)
                 {
                     LoggerInstance.Msg("got message " + res.GetProperty("data").GetString());
+                    //LoggerInstance.Msg(res);
                 }
 
                 switch (res.GetProperty("data").GetString())
@@ -90,9 +104,30 @@ namespace Bag_With_Friends
                         giveInfo();
                         break;
 
+                    case "yeet":
+                        amHost = false;
+                        foreach (Player player in playersInRoom)
+                        {
+                            player.Yeet();
+                        }
+                        foreach (GameObject ob in playerListingLookup.Values)
+                        {
+                            GameObject.Destroy(ob);
+                        }
+                        playersInRoom.Clear();
+                        playerLookup.Clear();
+                        shadowPrefabRequests.Clear();
+                        playerListingLookup.Clear();
+                        break;
+
                     case "pong":
                         myPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - lastPing;
                         lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                        mePlayerPlayer.ping = myPing;
+                        break;
+
+                    case "host":
+                        amHost = true;
                         break;
 
                     case "error":
@@ -133,12 +168,52 @@ namespace Bag_With_Friends
                         for (int i = 0; i < rooms.Count(); i++)
                         {
                             JsonElement room = rooms.ElementAt(i);
-                            makeRoomListing(room.GetProperty("name").GetString(), room.GetProperty("id").GetInt16(), room.GetProperty("pass").GetBoolean(), room.GetProperty("players").GetInt16(), room.GetProperty("host").GetString());
+                            MakeRoomListing(room.GetProperty("name").GetString(), room.GetProperty("id").GetInt16(), room.GetProperty("pass").GetBoolean(), room.GetProperty("players").GetInt16(), room.GetProperty("host").GetString());
                         }
                         break;
 
                     case "inRoom":
                         inRoom = res.GetProperty("inRoom").GetBoolean();
+
+                        if (inRoom && multiplayerMenu.activeSelf)
+                        {
+                            multiplayerMenu.SetActive(false);
+                            roomMenu.SetActive(true);
+                            MakePlayerInList(mePlayerPlayer);
+                        }
+
+                        if (!inRoom && roomMenu.activeSelf)
+                        {
+                            roomMenu.SetActive(false);
+                            multiplayerMenu.SetActive(true);
+                        }
+                        break;
+
+                    case "roomUpdate":
+                        roomMenuName.text = res.GetProperty("name").GetString();
+                        roomMenuPass.text = res.GetProperty("password").GetString();
+                        break;
+
+                    case "hostUpdate":
+                        amHost = res.GetProperty("newHost").GetInt64() == (long)playerId;
+                        mePlayerPlayer.host = amHost;
+                        playerListingLookup[(long)playerId].transform.GetChild(0).GetComponent<Text>().text = (mePlayerPlayer.host ? "[HOST] " : "") + mePlayerPlayer.name;
+                        roomMenuName.interactable = amHost;
+                        //roomMenuPass.interactable = amHost;
+                        //roomMenuUpdate.interactable = amHost;
+                        roomMenuPass.gameObject.SetActive(amHost);
+                        roomMenuUpdate.gameObject.SetActive(amHost);
+
+                        foreach (Player player in playersInRoom)
+                        {
+                            player.host = res.GetProperty("newHost").GetInt64() == (long)playerId;
+                            playerListingLookup[player.id].transform.GetChild(0).GetComponent<Text>().text = (player.host ? "[HOST] " : "") + player.name;
+                        }
+
+                        foreach (GameObject ob in playerListingLookup.Values)
+                        {
+                            ob.transform.GetChild(3).gameObject.SetActive(amHost);
+                        }
                         break;
 
                     case "addPlayer":
@@ -147,17 +222,20 @@ namespace Bag_With_Friends
                         playersInRoom.Add(playerToAdd);
                         playerLookup.Add(playerToAdd.id, playerToAdd);
                         playerToAdd.ChangeScene(recievedPlayer.GetProperty("scene").GetString());
+                        MakePlayerInList(playerToAdd);
 
-                        GameObject gam = new GameObject("TestOB");
+                        /*GameObject gam = new GameObject("TestOB");
                         GameObject.DontDestroyOnLoad(gam);
                         ThingTester tes = gam.AddComponent<ThingTester>();
-                        tes.player = playerToAdd;
+                        tes.player = playerToAdd;*/
                         break;
 
                     case "removePlayer":
                         Player playerToRemove = playerLookup[res.GetProperty("id").GetInt64()];
                         playersInRoom.Remove(playerToRemove);
                         playerLookup.Remove(playerToRemove.id);
+                        GameObject.Destroy(playerListingLookup[playerToRemove.id]);
+                        playerListingLookup.Remove(playerToRemove.id);
                         playerToRemove.Yeet();
                         playerToRemove = null;
                         break;
@@ -201,7 +279,7 @@ namespace Bag_With_Friends
                         JsonElement.ArrayEnumerator footRrot = res.GetProperty("footRRotation").EnumerateArray();
                         Quaternion footRRot = new Quaternion(float.Parse(footRrot.ElementAt(0).GetString()), float.Parse(footRrot.ElementAt(1).GetString()), float.Parse(footRrot.ElementAt(2).GetString()), float.Parse(footRrot.ElementAt(3).GetString()));
 
-                        playerToUpdate2.UpdatePosition(bodyPos, handLPos, handRPos, float.Parse(res.GetProperty("armStrechL").GetString()), float.Parse(res.GetProperty("armStrechR").GetString()), footLPos, footRPos, footLBendPos, footRBendPos, bodyRot, handLRot, handRRot, footLRot, footRRot);
+                        playerToUpdate2.UpdatePosition(bodyPos, float.Parse(res.GetProperty("height").GetString()), handLPos, handRPos, float.Parse(res.GetProperty("armStrechL").GetString()), float.Parse(res.GetProperty("armStrechR").GetString()), footLPos, footRPos, footLBendPos, footRBendPos, bodyRot, handLRot, handRRot, footLRot, footRRot);
                         break;
                 }
             };
@@ -277,6 +355,7 @@ namespace Bag_With_Friends
         {
             if (!connected) return;
             ws.Send($"{{\"data\":\"yeet\", \"id\":{playerId}}}");
+            amHost = false;
         }
 
         public void MakeMenu()
@@ -368,7 +447,7 @@ namespace Bag_With_Friends
             joinButton.image = joinBG;
             joinButton.onClick.AddListener(() =>
             {
-                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 5000)
+                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 1000)
                 {
                     lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                     ws.Send($"{{\"data\":\"getRooms\"}}");
@@ -475,7 +554,7 @@ namespace Bag_With_Friends
             makeRoom.image = makeBG;
             makeRoom.onClick.AddListener(() =>
             {
-                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 5000)
+                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 1000)
                 {
                     lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                     ws.Send($"{{\"data\":\"makeRoom\", \"id\":{playerId}, \"name\":\"{roomName.text}\", \"pass\":\"{roomName2.text}\"}}");
@@ -516,7 +595,7 @@ namespace Bag_With_Friends
             GameObject.DontDestroyOnLoad(playerContainer);
         }
 
-        public void makeRoomListing(string name, int roomId, bool hasPass, int playerCount, string hostname)
+        public void MakeRoomListing(string name, int roomId, bool hasPass, int playerCount, string hostname)
         {
             GameObject room = new GameObject("Room");
             room.transform.SetParent(roomContainer.transform);
@@ -646,8 +725,313 @@ namespace Bag_With_Friends
             room.transform.localScale = multiplayerMenu.transform.localScale;
         }
 
+        public void MakeRoomMenu()
+        {
+            LoggerInstance.Msg("Making Room Menu");
+
+            roomMenu = new GameObject("background");
+            roomMenu.transform.SetParent(multiplayerMenuObject.transform);
+            Image bgIm = roomMenu.AddComponent<Image>();
+            bgIm.rectTransform.sizeDelta = new Vector2(1820, 780);
+            bgIm.rectTransform.anchoredPosition = new Vector2(0, 100);
+            bgIm.color = new Color(0, 0, 0, 0.85f);
+
+            GameObject scroller = new GameObject("Player List");
+            scroller.transform.SetParent(roomMenu.transform);
+
+            GameObject viewport = new GameObject("Viewport");
+            viewport.transform.SetParent(scroller.transform);
+
+            playerMenuContainer = new GameObject("Content");
+            playerMenuContainer.transform.SetParent(viewport.transform);
+
+            ScrollRect playerScroll = scroller.AddComponent<ScrollRect>();
+            playerScroll.horizontal = false;
+            playerScroll.elasticity = 0.05f;
+
+            RectMask2D mask = viewport.AddComponent<RectMask2D>();
+            Image maskImage = viewport.AddComponent<Image>();
+            mask.rectTransform.sizeDelta = new Vector2(1320, 730);
+            maskImage.color = new Color(0, 0, 0, 0.75f);
+
+            playerBack = playerMenuContainer.AddComponent<Image>();
+            playerBack.color = new Color(0, 0, 0, 0.5f);
+            playerBack.rectTransform.pivot = new Vector2(0.5f, 1);
+            VerticalLayoutGroup verticalLayoutGroup0 = playerMenuContainer.AddComponent<VerticalLayoutGroup>();
+            ContentSizeFitter contentSizeFitter0 = playerMenuContainer.AddComponent<ContentSizeFitter>();
+            contentSizeFitter0.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            verticalLayoutGroup0.childAlignment = TextAnchor.UpperCenter;
+            verticalLayoutGroup0.childControlHeight = false;
+            verticalLayoutGroup0.childControlWidth = false;
+            verticalLayoutGroup0.childForceExpandHeight = false;
+            verticalLayoutGroup0.childForceExpandWidth = false;
+            verticalLayoutGroup0.childScaleHeight = false;
+            verticalLayoutGroup0.childScaleWidth = false;
+            verticalLayoutGroup0.spacing = 5;
+
+            playerScroll.viewport = mask.rectTransform;
+            playerScroll.content = playerMenuContainer.GetComponent<Image>().rectTransform;
+
+            scroller.transform.localPosition = new Vector3(225, 0, 0);
+            playerBack.rectTransform.sizeDelta = new Vector2(1320, 110 * playerMenuContainer.transform.childCount - 10);
+
+            GameObject roomOb = new GameObject("Room Name");
+            roomOb.transform.SetParent(roomMenu.transform);
+            roomOb.transform.localPosition = new Vector3(-650, 150, 0);
+            roomMenuName = roomOb.AddComponent<InputField>();
+            roomMenuName.caretColor = new Color(0f, 0f, 0f, 1);
+            Image roomBG = roomOb.AddComponent<Image>();
+            roomBG.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            roomBG.rectTransform.sizeDelta = new Vector2(200, 50);
+
+            GameObject placeholder = new GameObject("placeholder");
+            placeholder.transform.SetParent(roomOb.transform);
+            placeholder.transform.localPosition = Vector3.zero;
+            roomMenuRoomName = placeholder.AddComponent<Text>();
+            roomMenuRoomName.text = "Room name";
+            roomMenuRoomName.font = arial;
+            roomMenuRoomName.fontSize = 35;
+            roomMenuRoomName.alignment = TextAnchor.MiddleLeft;
+            roomMenuRoomName.color = Color.black;
+            roomMenuRoomName.rectTransform.sizeDelta = new Vector2(200, 50);
+
+            GameObject input = new GameObject("input");
+            input.transform.SetParent(roomOb.transform);
+            input.transform.localPosition = Vector3.zero;
+            Text inputText = input.AddComponent<Text>();
+            inputText.font = arial;
+            inputText.fontSize = 35;
+            inputText.alignment = TextAnchor.MiddleLeft;
+            inputText.color = Color.black;
+            inputText.rectTransform.sizeDelta = new Vector2(200, 50);
+
+            roomMenuName.placeholder = roomMenuRoomName;
+            roomMenuName.textComponent = inputText;
+            roomMenuName.transition = Selectable.Transition.None;
+
+            inputFields.Add(roomMenuName);
+            inputFieldChecks.Add(roomMenuName, false);
+            roomMenuName.gameObject.AddComponent<EventSystem>().enabled = false;
+
+            GameObject roomOb2 = new GameObject("Room Password");
+            roomOb2.transform.SetParent(roomMenu.transform);
+            roomOb2.transform.localPosition = new Vector3(-650, 75, 0);
+            roomMenuPass = roomOb2.AddComponent<InputField>();
+            roomMenuPass.caretColor = new Color(0f, 0f, 0f, 1);
+            Image roomBG2 = roomOb2.AddComponent<Image>();
+            roomBG2.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            roomBG2.rectTransform.sizeDelta = new Vector2(200, 50);
+            roomMenuPass.inputType = InputField.InputType.Password;
+
+            GameObject placeholder2 = new GameObject("placeholder");
+            placeholder2.transform.SetParent(roomOb2.transform);
+            placeholder2.transform.localPosition = Vector3.zero;
+            roomMenuRoomPass = placeholder2.AddComponent<Text>();
+            roomMenuRoomPass.text = "New pass\nor empty";
+            roomMenuRoomPass.font = arial;
+            roomMenuRoomPass.fontSize = 15;
+            roomMenuRoomPass.alignment = TextAnchor.MiddleLeft;
+            roomMenuRoomPass.color = Color.black;
+            roomMenuRoomPass.rectTransform.sizeDelta = new Vector2(200, 50);
+
+            GameObject input2 = new GameObject("input");
+            input2.transform.SetParent(roomOb2.transform);
+            input2.transform.localPosition = Vector3.zero;
+            Text inputText2 = input2.AddComponent<Text>();
+            inputText2.font = arial;
+            inputText2.fontSize = 38;
+            inputText2.alignment = TextAnchor.MiddleLeft;
+            inputText2.color = Color.black;
+            inputText2.rectTransform.sizeDelta = new Vector2(200, 50);
+
+            roomMenuPass.placeholder = roomMenuRoomPass;
+            roomMenuPass.textComponent = inputText2;
+            roomMenuPass.transition = Selectable.Transition.None;
+
+            inputFields.Add(roomMenuPass);
+            inputFieldChecks.Add(roomMenuPass, false);
+            roomMenuPass.gameObject.AddComponent<EventSystem>().enabled = false;
+
+            GameObject makeRoomOb = new GameObject("Update Room");
+            makeRoomOb.transform.SetParent(roomMenu.transform);
+            makeRoomOb.transform.localPosition = new Vector3(-650, 0, 0);
+            roomMenuUpdate = makeRoomOb.AddComponent<UnityEngine.UI.Button>();
+            Image makeBG = makeRoomOb.AddComponent<Image>();
+            makeBG.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            makeBG.rectTransform.sizeDelta = new Vector2(200, 50);
+            roomMenuUpdate.image = makeBG;
+            roomMenuUpdate.onClick.AddListener(() =>
+            {
+                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 1000)
+                {
+                    lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    ws.Send($"{{\"data\":\"updateRoom\", \"id\":{playerId}, \"name\":\"{roomMenuName.text}\", \"pass\":\"{roomMenuPass.text}\"}}");
+                }
+            });
+
+            GameObject makeRoomTextOb = new GameObject("Update");
+            makeRoomTextOb.transform.SetParent(makeRoomOb.transform);
+            makeRoomTextOb.transform.localPosition = Vector3.zero;
+            Text makeRoomText = makeRoomTextOb.AddComponent<Text>();
+            makeRoomText.font = arial;
+            makeRoomText.fontSize = 36;
+            makeRoomText.alignment = TextAnchor.MiddleCenter;
+            makeRoomText.text = "Update Room";
+            makeRoomText.color = Color.black;
+            makeRoomText.rectTransform.sizeDelta = new Vector2(200, 50);
+
+            GameObject KofiOb = new GameObject("Kofi Button");
+            KofiOb.transform.SetParent(roomMenu.transform);
+            KofiOb.transform.localPosition = Vector2.zero;
+            UnityEngine.UI.Button kofiButton = KofiOb.AddComponent<UnityEngine.UI.Button>();
+            Image kofi = KofiOb.AddComponent<Image>();
+            byte[] imageBytes = new byte[(int)thisAssembly.GetManifestResourceStream("Bag_With_Friends.Kofi.png").Length];
+            thisAssembly.GetManifestResourceStream("Bag_With_Friends.Kofi.png").Read(imageBytes, 0, (int)thisAssembly.GetManifestResourceStream("Bag_With_Friends.Kofi.png").Length);
+            Texture2D tex = new Texture2D(2, 2);
+            ImageConversion.LoadImage(tex, imageBytes);
+            kofi.sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+            kofi.rectTransform.sizeDelta = new Vector2(tex.width / 3f, tex.height / 3f);
+            kofi.rectTransform.pivot = Vector2.zero;
+            kofi.rectTransform.anchoredPosition = new Vector2(-910, -390);
+            kofiButton.image = kofi;
+            kofiButton.onClick.AddListener(() =>
+            {
+                Application.OpenURL("https://ko-fi.com/givowo");
+            });
+
+            GameObject leaveRoomOb = new GameObject("Leave Room");
+            leaveRoomOb.transform.SetParent(roomMenu.transform);
+            leaveRoomOb.transform.localPosition = new Vector3(-650, -225, 0);
+            UnityEngine.UI.Button leaveRoom = leaveRoomOb.AddComponent<UnityEngine.UI.Button>();
+            Image leaveBG = leaveRoomOb.AddComponent<Image>();
+            leaveBG.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            leaveBG.rectTransform.sizeDelta = new Vector2(200, 50);
+            leaveRoom.image = leaveBG;
+            leaveRoom.onClick.AddListener(() =>
+            {
+                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 1000)
+                {
+                    lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    ws.Send($"{{\"data\":\"leaveRoom\", \"id\":{playerId}}}");
+                }
+            });
+
+            GameObject leaveRoomTextOb = new GameObject("Update");
+            leaveRoomTextOb.transform.SetParent(leaveRoomOb.transform);
+            leaveRoomTextOb.transform.localPosition = Vector3.zero;
+            Text leaveRoomText = leaveRoomTextOb.AddComponent<Text>();
+            leaveRoomText.font = arial;
+            leaveRoomText.fontSize = 36;
+            leaveRoomText.alignment = TextAnchor.MiddleCenter;
+            leaveRoomText.text = "Leave Room";
+            leaveRoomText.color = Color.black;
+            leaveRoomText.rectTransform.sizeDelta = new Vector2(200, 50);
+
+            for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
+            {
+                string[] splitNam = SceneUtility.GetScenePathByBuildIndex(i).Split('/');
+                string scene = splitNam[splitNam.Length - 1].Split('.')[0];
+                
+                GameObject sceneOb = new GameObject("Scene " + scene);
+                sceneOb.transform.SetParent(playerMenuContainer.transform);
+                Image bg = sceneOb.AddComponent<Image>();
+                bg.color = new Color(1, 1, 1, 0.05f);
+                bg.rectTransform.sizeDelta = new Vector2(1320, 50);
+
+                GameObject sceneNameOb = new GameObject("Name");
+                sceneNameOb.transform.SetParent(sceneOb.transform);
+                sceneNameOb.transform.localPosition = new Vector3(-650, 0, 0);
+                Text sceneName = sceneNameOb.AddComponent<Text>();
+                sceneName.rectTransform.pivot = new Vector2(0, 0.5f);
+                sceneName.rectTransform.sizeDelta = new Vector2(650, 50);
+                sceneName.text = scene;
+                sceneName.fontSize = 36;
+                sceneName.font = arial;
+                sceneName.lineSpacing = 0.85f;
+                sceneName.color = new Color(0, 1, 0, 1);
+                sceneName.alignment = TextAnchor.MiddleLeft;
+
+                sceneOb.transform.localScale = roomMenu.transform.localScale;
+                sceneSplitters.Add(scene, sceneOb.transform);
+            }
+        }
+
+        public void MakePlayerInList(Player player)
+        {
+            GameObject playerOB = new GameObject("Player " + player.name);
+            playerOB.transform.SetParent(playerMenuContainer.transform);
+            Image bg = playerOB.AddComponent<Image>();
+            bg.color = new Color(1, 1, 1, 0.05f);
+            bg.rectTransform.sizeDelta = new Vector2(1320, 50);
+
+            GameObject playerNameOb = new GameObject("Name");
+            playerNameOb.transform.SetParent(playerOB.transform);
+            playerNameOb.transform.localPosition = new Vector3(-650, 0, 0);
+            player.nameText = playerNameOb.AddComponent<Text>();
+            player.nameText.rectTransform.pivot = new Vector2(0, 0.5f);
+            player.nameText.rectTransform.sizeDelta = new Vector2(650, 50);
+            player.nameText.text = (player.host ? "[HOST] " : "") + player.name;
+            player.nameText.fontSize = 36;
+            player.nameText.font = arial;
+            player.nameText.lineSpacing = 0.85f;
+            player.nameText.alignment = TextAnchor.MiddleLeft;
+
+            GameObject heightOb = new GameObject("Height");
+            heightOb.transform.SetParent(playerOB.transform);
+            heightOb.transform.localPosition = new Vector3(10, 0, 0);
+            player.heightText = heightOb.AddComponent<Text>();
+            player.heightText.rectTransform.pivot = new Vector2(0, 0.5f);
+            player.heightText.rectTransform.sizeDelta = new Vector2(300, 50);
+            player.heightText.text = 0 + "m";
+            player.heightText.fontSize = 36;
+            player.heightText.font = arial;
+            player.heightText.lineSpacing = 0.85f;
+            player.heightText.alignment = TextAnchor.MiddleLeft;
+
+            GameObject pingOb = new GameObject("Ping");
+            pingOb.transform.SetParent(playerOB.transform);
+            pingOb.transform.localPosition = new Vector3(300, 0, 0);
+            player.pingText = pingOb.AddComponent<Text>();
+            player.pingText.rectTransform.sizeDelta = new Vector2(120, 50);
+            player.pingText.text = player.ping + "ms";
+            player.pingText.fontSize = 36;
+            player.pingText.font = arial;
+            player.pingText.alignment = TextAnchor.MiddleCenter;
+
+            GameObject banButtonOb = new GameObject("Ban Button");
+            banButtonOb.transform.SetParent(playerOB.transform);
+            banButtonOb.transform.localPosition = new Vector3(540, 0, 0);
+            UnityEngine.UI.Button banButton = banButtonOb.AddComponent<UnityEngine.UI.Button>();
+            Image banBG = banButtonOb.AddComponent<Image>();
+            banBG.color = new Color(1, 1, 1, 0.3f);
+            banBG.rectTransform.sizeDelta = new Vector2(230, 44);
+            banButton.image = banBG;
+
+            GameObject banTextOb = new GameObject("banText");
+            banTextOb.transform.SetParent(banButtonOb.transform);
+            banTextOb.transform.localPosition = Vector3.zero;
+            Text banText = banTextOb.AddComponent<Text>();
+            banText.font = arial;
+            banText.fontSize = 40;
+            banText.alignment = TextAnchor.MiddleCenter;
+            banText.text = "Ban";
+            banText.rectTransform.sizeDelta = new Vector2(230, 44);
+
+            banButton.onClick.AddListener(() =>
+            {
+                ws.Send($"{{\"data\":\"banPlayer\", \"id\":{playerId}, \"ban\":{player.id}}}");
+            });
+
+            banButtonOb.SetActive(amHost);
+
+            playerOB.transform.localScale = roomMenu.transform.localScale;
+            playerListingLookup.Add(player.id, playerOB);
+        }
+
         public override async void OnFixedUpdate()
         {
+            //LoggerInstance.Msg(amHost);
+
             if (makingShadowPrefab) return;
 
             if (SteamManager.Initialized && ws == null)
@@ -657,7 +1041,7 @@ namespace Bag_With_Friends
 
             if (!connected) return;
 
-            if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastPing + 5000)
+            if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastPing + 1000)
             {
                 lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 ws.Send($"{{\"data\":\"ping\", \"id\":{playerId}, \"ping\":{lastPing}}}");
@@ -726,7 +1110,15 @@ namespace Bag_With_Friends
             {
                 //meFoots.legHolder.localPosition = new Vector3(0, meFoots.legHolderDefaultPos.localPosition.y, 0);
 
+                float height = shadow.transform.position.y;
+                if (GameObject.Find("ResetPoint") != null)
+                {
+                    height -= GameObject.Find("ResetPoint").transform.position.y;
+                }
+                mePlayerPlayer.heightText.text = height.ToString("#.##") + "m";
+
                 string updateString = $"{{\"data\":\"updatePosition\", \"id\":{playerId}, " +
+                    $"\"height\":\"{height}\", " +
                     $"\"position\":[\"{shadow.transform.position.x}\",\"{shadow.transform.position.y}\",\"{shadow.transform.position.z}\"], " +
                     $"\"handL\":[\"{shadow.handIK_L.solver.arm.target.position.x}\",\"{shadow.handIK_L.solver.arm.target.position.y}\",\"{shadow.handIK_L.solver.arm.target.position.z}\"], " +
                     $"\"handR\":[\"{shadow.handIK_R.solver.arm.target.position.x}\",\"{shadow.handIK_R.solver.arm.target.position.y}\",\"{shadow.handIK_R.solver.arm.target.position.z}\"], " +
@@ -747,8 +1139,32 @@ namespace Bag_With_Friends
                 //meFoots.legHolder.localPosition = new Vector3(0, meFoots.legHolderDefaultPos.localPosition.y, meFoots.legHolderDefaultPos.localPosition.z);
             }
 
+            foreach (Transform tran in sceneSplitters.Values)
+            {
+                tran.gameObject.SetActive(false);
+            }
+
+            Transform meSplitter = sceneSplitters[mePlayerPlayer.scene];
+            meSplitter.gameObject.SetActive(true);
+            playerListingLookup[mePlayerPlayer.id].transform.SetSiblingIndex(meSplitter.GetSiblingIndex() + 1);
+
             foreach (Player player in playersInRoom)
             {
+                Transform playerSplitter = sceneSplitters[player.scene];
+                playerSplitter.gameObject.SetActive(true);
+                playerListingLookup[player.id].transform.SetSiblingIndex(playerSplitter.GetSiblingIndex() + 1);
+
+                //LoggerInstance.Msg(player.name + "'s ping: " + player.ping + "ms");
+                player.pingText.text = player.ping + "ms";
+                player.heightText.text = player.height.ToString("#.##") + "m";
+                
+                if (player.height == 0)
+                {
+                    player.heightText.text = "";
+                }
+
+                if (player.player == null) continue;
+
                 player.handLIK.solver.arm.armLengthMlp = player.armStretchL;
                 player.handRIK.solver.arm.armLengthMlp = player.armStretchR;
 
@@ -776,35 +1192,47 @@ namespace Bag_With_Friends
                 player.footL.transform.rotation = player.footLRotation;
                 player.footR.transform.rotation = player.footRRotation;
             }
+
+            if (SceneManager.GetActiveScene().name == "TitleScreen")
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
         }
 
         public override void OnUpdate()
         {
-            if (!connected) return;
-
-            if (Input.GetKeyDown(KeyCode.Tab))
-            {
-                multiplayerMenu.SetActive(!multiplayerMenu.activeSelf);
-
-                if (multiplayerMenu.activeSelf)
-                {
-                    mouseOnOpen = Cursor.lockState;
-                } else if (InGameMenu.isCurrentlyNavigationMenu)
-                {
-                    mouseOnOpen = CursorLockMode.None;
-                }
-
-                Cursor.lockState = multiplayerMenu.activeSelf ? CursorLockMode.None : mouseOnOpen;
-                Cursor.visible = multiplayerMenu.activeSelf || mouseOnOpen == CursorLockMode.None ? true : false;
-            }
-
             if (Input.GetKeyDown(KeyCode.BackQuote))
             {
                 Cursor.lockState = Cursor.lockState == CursorLockMode.Locked ? CursorLockMode.None : CursorLockMode.Locked;
                 Cursor.visible = Cursor.lockState == CursorLockMode.None;
             }
 
-            if (multiplayerMenu.activeSelf)
+            if (!connected) return;
+
+            if (Input.GetKeyDown(KeyCode.Tab))
+            {
+                if (inRoom)
+                {
+                    roomMenu.SetActive(!roomMenu.activeSelf);
+                } else
+                {
+                    multiplayerMenu.SetActive(!multiplayerMenu.activeSelf);
+                }
+
+                if (multiplayerMenu.activeSelf || roomMenu.activeSelf)
+                {
+                    mouseOnOpen = Cursor.lockState;
+                } else if (InGameMenu.isCurrentlyNavigationMenu || SceneManager.GetActiveScene().name == "TitleScreen")
+                {
+                    mouseOnOpen = CursorLockMode.None;
+                }
+
+                Cursor.lockState = (multiplayerMenu.activeSelf || roomMenu.activeSelf) ? CursorLockMode.None : mouseOnOpen;
+                Cursor.visible = (multiplayerMenu.activeSelf || roomMenu.activeSelf) || mouseOnOpen == CursorLockMode.None ? true : false;
+            }
+
+            if (multiplayerMenu.activeSelf || roomMenu.activeSelf)
             {
 
                 InputField newClicked = null;
@@ -844,12 +1272,40 @@ namespace Bag_With_Friends
         {
             if (multiplayerMenuObject == null) {
                 MakeMenu();
+                MakeRoomMenu();
                 multiplayerMenu.SetActive(false);
+                roomMenu.SetActive(false);
+
+                GameObject infoTextOb = new GameObject("update");
+                infoTextOb.transform.SetParent(updateContainer.transform);
+                Text infoText = infoTextOb.AddComponent<Text>();
+                infoText.text = "Press ` to lock/unlock Mouse\nPress Tab to open/close menu";
+                infoText.color = new Color(1, 1, 1, 1);
+                infoText.fontSize = 18;
+                infoText.font = arial;
+                infoText.fontStyle = FontStyle.Bold;
+                infoText.alignment = TextAnchor.MiddleCenter;
+                infoText.horizontalOverflow = HorizontalWrapMode.Overflow;
+                infoText.rectTransform.sizeDelta = new Vector2(0, 20);
+                infoTextOb.AddComponent<InfoCloser>();
+                infoTextOb.transform.localScale = multiplayerMenu.transform.localScale;
+            }
+
+            if (sceneName == "TitleScreen")
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = Cursor.lockState == CursorLockMode.None;
+            }
+
+            if (sceneName == "TitleScreen" || sceneName == "Cabin")
+            {
+                mePlayerPlayer.heightText.text = "";
             }
 
             if (makingShadowPrefab) return;
             if (!connected) return;
 
+            mePlayerPlayer.scene = sceneName;
             LoggerInstance.Msg("In scene " + sceneName);
             LoggerInstance.Msg("Shadow Prefab " + shadowPrefab);
 
@@ -902,6 +1358,7 @@ namespace Bag_With_Friends
                 playerId = (ulong)LongRandom(0, 100000000000000);
                 playerName = RandomString(10);
             }
+            mePlayerPlayer = new Player(playerName, (long)playerId, SceneManager.GetActiveScene().name, amHost, this);
             lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             ws.Send($"{{\"data\":\"identify\", \"id\":{playerId}, \"name\":\"{playerName}\", \"scene\":\"{SceneManager.GetActiveScene().name}\", \"ping\":{lastPing}}}");
             ws.Send($"{{\"data\":\"getRooms\"}}");
