@@ -92,7 +92,7 @@ namespace Bag_With_Friends
                 JsonDocument doc = JsonDocument.Parse(e.Data);
                 JsonElement res = doc.RootElement;
 
-                if (res.GetProperty("data").GetString() != "updatePlayerPosition" && res.GetProperty("data").GetString() != "pong" && res.GetProperty("data").GetString() != "updatePlayerPing" && true)
+                if (res.GetProperty("data").GetString() != "updatePlayerPosition" && res.GetProperty("data").GetString() != "pong" && res.GetProperty("data").GetString() != "updatePlayerPing" && debugMode)
                 {
                     //LoggerInstance.Msg("got message " + res.GetProperty("data").GetString());
                     LoggerInstance.Msg(res);
