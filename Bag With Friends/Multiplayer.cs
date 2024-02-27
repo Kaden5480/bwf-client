@@ -63,10 +63,10 @@ namespace Bag_With_Friends
         Dictionary<InputField, bool> inputFieldChecks = new Dictionary<InputField, bool>(0);
 
         List<Player> playersInRoom = new List<Player>(0);
-        Dictionary<long, Player> playerLookup = new Dictionary<long, Player>(0);
+        Dictionary<ulong, Player> playerLookup = new Dictionary<ulong, Player>(0);
         public GameObject playerContainer;
         public Dictionary<string, Transform> sceneSplitters = new Dictionary<string, Transform>(0);
-        Dictionary<long, GameObject> playerListingLookup = new Dictionary<long, GameObject>(0);
+        Dictionary<ulong, GameObject> playerListingLookup = new Dictionary<ulong, GameObject>(0);
 
         GameObject mePlayer;
         BodyTurning meBodyTurning;
@@ -92,10 +92,10 @@ namespace Bag_With_Friends
                 JsonDocument doc = JsonDocument.Parse(e.Data);
                 JsonElement res = doc.RootElement;
 
-                if (res.GetProperty("data").GetString() != "updatePlayerPosition" && res.GetProperty("data").GetString() != "pong" && res.GetProperty("data").GetString() != "updatePlayerPing" && debugMode)
+                if (res.GetProperty("data").GetString() != "updatePlayerPosition" && res.GetProperty("data").GetString() != "pong" && res.GetProperty("data").GetString() != "updatePlayerPing" && true)
                 {
-                    LoggerInstance.Msg("got message " + res.GetProperty("data").GetString());
-                    //LoggerInstance.Msg(res);
+                    //LoggerInstance.Msg("got message " + res.GetProperty("data").GetString());
+                    LoggerInstance.Msg(res);
                 }
 
                 switch (res.GetProperty("data").GetString())
@@ -195,9 +195,11 @@ namespace Bag_With_Friends
                         break;
 
                     case "hostUpdate":
-                        amHost = res.GetProperty("newHost").GetInt64() == (long)playerId;
+                        amHost = res.GetProperty("newHost").GetUInt64() == playerId;
                         mePlayerPlayer.host = amHost;
-                        playerListingLookup[(long)playerId].transform.GetChild(0).GetComponent<Text>().text = (mePlayerPlayer.host ? "[HOST] " : "") + mePlayerPlayer.name;
+                        playerListingLookup[playerId].transform.GetChild(0).GetComponent<Text>().text = (mePlayerPlayer.host ? "[HOST] " : "") + mePlayerPlayer.name;
+                        LoggerInstance.Msg(playerId);
+                        LoggerInstance.Msg(res.GetProperty("newHost").GetUInt64());
                         roomMenuName.interactable = amHost;
                         //roomMenuPass.interactable = amHost;
                         //roomMenuUpdate.interactable = amHost;
@@ -206,7 +208,7 @@ namespace Bag_With_Friends
 
                         foreach (Player player in playersInRoom)
                         {
-                            player.host = res.GetProperty("newHost").GetInt64() == (long)playerId;
+                            player.host = res.GetProperty("newHost").GetUInt64() == playerId;
                             playerListingLookup[player.id].transform.GetChild(0).GetComponent<Text>().text = (player.host ? "[HOST] " : "") + player.name;
                         }
 
@@ -218,7 +220,7 @@ namespace Bag_With_Friends
 
                     case "addPlayer":
                         JsonElement recievedPlayer = res.GetProperty("player").EnumerateArray().ElementAt(0);
-                        Player playerToAdd = new Player(recievedPlayer.GetProperty("name").GetString(), recievedPlayer.GetProperty("id").GetInt64(), recievedPlayer.GetProperty("scene").GetString(), recievedPlayer.GetProperty("host").GetBoolean(), this);
+                        Player playerToAdd = new Player(recievedPlayer.GetProperty("name").GetString(), recievedPlayer.GetProperty("id").GetUInt64(), recievedPlayer.GetProperty("scene").GetString(), recievedPlayer.GetProperty("host").GetBoolean(), this);
                         playersInRoom.Add(playerToAdd);
                         playerLookup.Add(playerToAdd.id, playerToAdd);
                         playerToAdd.ChangeScene(recievedPlayer.GetProperty("scene").GetString());
@@ -231,7 +233,7 @@ namespace Bag_With_Friends
                         break;
 
                     case "removePlayer":
-                        Player playerToRemove = playerLookup[res.GetProperty("id").GetInt64()];
+                        Player playerToRemove = playerLookup[res.GetProperty("id").GetUInt64()];
                         playersInRoom.Remove(playerToRemove);
                         playerLookup.Remove(playerToRemove.id);
                         GameObject.Destroy(playerListingLookup[playerToRemove.id]);
@@ -241,17 +243,17 @@ namespace Bag_With_Friends
                         break;
 
                     case "updatePlayerScene":
-                        Player playerToUpdate = playerLookup[res.GetProperty("id").GetInt64()];
+                        Player playerToUpdate = playerLookup[res.GetProperty("id").GetUInt64()];
                         playerToUpdate.ChangeScene(res.GetProperty("scene").GetString());
                         break;
 
                     case "updatePlayerPing":
-                        Player playerToUpdate3 = playerLookup[res.GetProperty("id").GetInt64()];
+                        Player playerToUpdate3 = playerLookup[res.GetProperty("id").GetUInt64()];
                         playerToUpdate3.ping = res.GetProperty("ping").GetInt64();
                         break;
 
                     case "updatePlayerPosition":
-                        Player playerToUpdate2 = playerLookup[res.GetProperty("id").GetInt64()];
+                        Player playerToUpdate2 = playerLookup[res.GetProperty("id").GetUInt64()];
 
                         JsonElement.ArrayEnumerator position = res.GetProperty("position").EnumerateArray();
                         Vector3 bodyPos = new Vector3(float.Parse(position.ElementAt(0).GetString()), float.Parse(position.ElementAt(1).GetString()), float.Parse(position.ElementAt(2).GetString()));
@@ -354,7 +356,7 @@ namespace Bag_With_Friends
         public override void OnDeinitializeMelon()
         {
             if (!connected) return;
-            ws.Send($"{{\"data\":\"yeet\", \"id\":{playerId}}}");
+            ws.Send($"{{\"data\":\"yeet\", \"id\":\"{playerId}\"}}");
             amHost = false;
         }
 
@@ -557,7 +559,7 @@ namespace Bag_With_Friends
                 if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 1000)
                 {
                     lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    ws.Send($"{{\"data\":\"makeRoom\", \"id\":{playerId}, \"name\":\"{roomName.text}\", \"pass\":\"{roomName2.text}\"}}");
+                    ws.Send($"{{\"data\":\"makeRoom\", \"id\":\"{playerId}\", \"name\":\"{roomName.text}\", \"pass\":\"{roomName2.text}\"}}");
                 }
             });
 
@@ -719,7 +721,7 @@ namespace Bag_With_Friends
                     password = passInput.text;
                 }
                 LoggerInstance.Msg("Trying to join room " + name + " with password " + password);
-                ws.Send($"{{\"data\":\"joinRoom\", \"id\":{playerId}, \"room\":{roomId}, \"pass\":\"{password}\"}}");
+                ws.Send($"{{\"data\":\"joinRoom\", \"id\":\"{playerId}\", \"room\":{roomId}, \"pass\":\"{password}\"}}");
             });
 
             room.transform.localScale = multiplayerMenu.transform.localScale;
@@ -865,7 +867,7 @@ namespace Bag_With_Friends
                 if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 1000)
                 {
                     lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    ws.Send($"{{\"data\":\"updateRoom\", \"id\":{playerId}, \"name\":\"{roomMenuName.text}\", \"pass\":\"{roomMenuPass.text}\"}}");
+                    ws.Send($"{{\"data\":\"updateRoom\", \"id\":\"{playerId}\", \"name\":\"{roomMenuName.text}\", \"pass\":\"{roomMenuPass.text}\"}}");
                 }
             });
 
@@ -912,7 +914,7 @@ namespace Bag_With_Friends
                 if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 1000)
                 {
                     lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    ws.Send($"{{\"data\":\"leaveRoom\", \"id\":{playerId}}}");
+                    ws.Send($"{{\"data\":\"leaveRoom\", \"id\":\"{playerId}\"}}");
                 }
             });
 
@@ -1019,7 +1021,7 @@ namespace Bag_With_Friends
 
             banButton.onClick.AddListener(() =>
             {
-                ws.Send($"{{\"data\":\"banPlayer\", \"id\":{playerId}, \"ban\":{player.id}}}");
+                ws.Send($"{{\"data\":\"banPlayer\", \"id\":\"{playerId}\", \"ban\":{player.id}}}");
             });
 
             banButtonOb.SetActive(amHost);
@@ -1044,7 +1046,7 @@ namespace Bag_With_Friends
             if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastPing + 1000)
             {
                 lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                ws.Send($"{{\"data\":\"ping\", \"id\":{playerId}, \"ping\":{lastPing}}}");
+                ws.Send($"{{\"data\":\"ping\", \"id\":\"{playerId}\", \"ping\":{lastPing}}}");
             }
 
             /*for (int i = shadowPrefabs.Count; i < 10; i++)
@@ -1117,7 +1119,7 @@ namespace Bag_With_Friends
                 }
                 mePlayerPlayer.heightText.text = height.ToString("#.##") + "m";
 
-                string updateString = $"{{\"data\":\"updatePosition\", \"id\":{playerId}, " +
+                string updateString = $"{{\"data\":\"updatePosition\", \"id\":\"{playerId}\", " +
                     $"\"height\":\"{height}\", " +
                     $"\"position\":[\"{shadow.transform.position.x}\",\"{shadow.transform.position.y}\",\"{shadow.transform.position.z}\"], " +
                     $"\"handL\":[\"{shadow.handIK_L.solver.arm.target.position.x}\",\"{shadow.handIK_L.solver.arm.target.position.y}\",\"{shadow.handIK_L.solver.arm.target.position.z}\"], " +
@@ -1309,7 +1311,7 @@ namespace Bag_With_Friends
             LoggerInstance.Msg("In scene " + sceneName);
             LoggerInstance.Msg("Shadow Prefab " + shadowPrefab);
 
-            ws.Send($"{{\"data\":\"switchScene\", \"id\":{playerId}, \"scene\":\"{sceneName}\"}}");
+            ws.Send($"{{\"data\":\"switchScene\", \"id\":\"{playerId}\", \"scene\":\"{sceneName}\"}}");
             multiplayerMenu.SetActive(false);
 
             mePlayer = GameObject.Find("Player");
@@ -1358,9 +1360,9 @@ namespace Bag_With_Friends
                 playerId = (ulong)LongRandom(0, 100000000000000);
                 playerName = RandomString(10);
             }
-            mePlayerPlayer = new Player(playerName, (long)playerId, SceneManager.GetActiveScene().name, amHost, this);
+            mePlayerPlayer = new Player(playerName, playerId, SceneManager.GetActiveScene().name, amHost, this);
             lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            ws.Send($"{{\"data\":\"identify\", \"id\":{playerId}, \"name\":\"{playerName}\", \"scene\":\"{SceneManager.GetActiveScene().name}\", \"ping\":{lastPing}}}");
+            ws.Send($"{{\"data\":\"identify\", \"id\":\"{playerId}\", \"name\":\"{playerName}\", \"scene\":\"{SceneManager.GetActiveScene().name}\", \"ping\":{lastPing}}}");
             ws.Send($"{{\"data\":\"getRooms\"}}");
         }
 

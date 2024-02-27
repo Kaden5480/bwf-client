@@ -15,7 +15,7 @@ namespace Bag_With_Friends
         Multiplayer manager;
 
         public string name;
-        public long id;
+        public ulong id;
         public string scene;
         public bool host;
 
@@ -59,7 +59,7 @@ namespace Bag_With_Friends
         public Text nameText;
         public Text heightText;
 
-        public Player(string name, long id, string scene, bool host, Multiplayer manager)
+        public Player(string name, ulong id, string scene, bool host, Multiplayer manager)
         {
             this.name = name;
             this.id = id;
