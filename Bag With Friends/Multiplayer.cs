@@ -1310,11 +1310,11 @@ namespace Bag_With_Friends
             mePlayerPlayer.scene = sceneName;
             LoggerInstance.Msg("In scene " + sceneName);
             LoggerInstance.Msg("Shadow Prefab " + shadowPrefab);
+            LoggerInstance.Msg("Players in room: " + playersInRoom.Count);
 
             ws.Send($"{{\"data\":\"switchScene\", \"id\":\"{playerId}\", \"scene\":\"{sceneName}\"}}");
             multiplayerMenu.SetActive(false);
 
-            mePlayer = GameObject.Find("Player");
 
             PlayerShadow[] shads = Resources.FindObjectsOfTypeAll<PlayerShadow>();
             if (shads.Length != 0)
