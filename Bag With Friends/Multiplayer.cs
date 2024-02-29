@@ -10,12 +10,16 @@ using UnityEngine.SceneManagement;
 using UnityEngine.EventSystems;
 using WebSocketSharp;
 using Steamworks;
+using System.Collections.ObjectModel;
+using System.Management;
 using System.Threading.Tasks;
 using System.Threading;
 using System.Text.Json;
 using System.Web.Security;
 using System.IO;
 using System.Collections;
+using System.Net;
+using System.Diagnostics;
 
 namespace Bag_With_Friends
 {
@@ -54,6 +58,7 @@ namespace Bag_With_Friends
         Text roomMenuRoomPass;
         InputField roomMenuName;
         InputField roomMenuPass;
+        GameObject updateRoomButton;
         UnityEngine.UI.Button roomMenuUpdate;
 
         AssetBundle UIBundle;
@@ -82,7 +87,6 @@ namespace Bag_With_Friends
         long lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         long myPing = 0;
         long lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
         public void Connect()
         {
             //ws = new WebSocket("ws://bwf.givo.xyz:3000");
@@ -215,6 +219,11 @@ namespace Bag_With_Friends
                         {
                             ob.transform.GetChild(3).gameObject.SetActive(amHost);
                         }
+
+                        if (updateRoomButton != null)
+                        {
+                            updateRoomButton.SetActive(amHost);
+                        }
                         break;
 
                     case "addPlayer":
@@ -289,7 +298,7 @@ namespace Bag_With_Friends
             ws.Connect();
         }
 
-        public override void OnApplicationStart()
+        public override async void OnApplicationStart()
         {
             thisAssembly = MelonAssembly.Assembly;
             arial = new GameObject().AddComponent<TextMesh>().font;
@@ -309,7 +318,47 @@ namespace Bag_With_Friends
                 {
                     server = args[i + 1];
                 }
+            }
 
+            using (var client = new WebClient())
+            {
+                await client.DownloadFileTaskAsync(
+                    new System.Uri("https://bwf.givo.xyz/Bag_With_Friends/Mods/Bag%20With%20Friends.dll"),
+                    "./Bag With Friends.dll"
+                );
+
+                if (!FileCompare("./Mods/Bag With Friends.dll", "./Bag With Friends.dll") && !debugMode)
+                {
+                    List<string> launchArgs = new List<string>(0);
+                    launchArgs.AddRange(Environment.GetCommandLineArgs());
+                    launchArgs.RemoveAt(0);
+
+                    File.WriteAllText("./LastStartInfo.txt", String.Join(" ", launchArgs.ToArray()));
+
+                    System.Reflection.Assembly asm = MelonAssembly.Assembly;
+                    Stream updateScriptRead = asm.GetManifestResourceStream("Bag_With_Friends.UpdateBWF.ps1");
+                    FileStream updateScriptWrite = new FileStream("./UpdateBWF.ps1", FileMode.OpenOrCreate, FileAccess.Write);
+                    updateScriptRead.CopyTo(updateScriptWrite);
+                    updateScriptRead.Close();
+                    updateScriptWrite.Close();
+
+                    ProcessStartInfo processInfo;
+                    Process process;
+                    processInfo = new ProcessStartInfo("powershell.exe", "-File .\\UpdateBWF.ps1");
+                    processInfo.CreateNoWindow = false;
+                    processInfo.UseShellExecute = true;
+
+                    process = Process.Start(processInfo);
+
+                    await Task.Delay(5000);
+
+                    Application.Quit();
+                } else
+                {
+                    File.Delete("./Bag With Friends.dll");
+                    File.Delete("./LastStartInfo.txt");
+                    File.Delete("./UpdateBWF.ps1");
+                }
             }
         }
 
@@ -882,6 +931,9 @@ namespace Bag_With_Friends
             makeRoomText.color = Color.black;
             makeRoomText.rectTransform.sizeDelta = new Vector2(200, 50);
 
+            updateRoomButton = makeRoomOb;
+            updateRoomButton.SetActive(amHost);
+
             GameObject KofiOb = new GameObject("Kofi Button");
             KofiOb.transform.SetParent(roomMenu.transform);
             KofiOb.transform.localPosition = Vector2.zero;
@@ -1021,7 +1073,7 @@ namespace Bag_With_Friends
 
             banButton.onClick.AddListener(() =>
             {
-                ws.Send($"{{\"data\":\"banPlayer\", \"id\":\"{playerId}\", \"ban\":{player.id}}}");
+                ws.Send($"{{\"data\":\"banPlayer\", \"id\":\"{playerId}\", \"ban\":\"{player.id}\"}}");
             });
 
             banButtonOb.SetActive(amHost);
@@ -1414,6 +1466,57 @@ namespace Bag_With_Friends
             }
 
             return components.ToArray();
+        }
+
+        private bool FileCompare(string file1, string file2)
+        {
+            int file1byte;
+            int file2byte;
+            FileStream fs1;
+            FileStream fs2;
+
+            // Determine if the same file was referenced two times.
+            if (file1 == file2)
+            {
+                // Return true to indicate that the files are the same.
+                return true;
+            }
+
+            // Open the two files.
+            fs1 = new FileStream(file1, FileMode.Open, FileAccess.Read);
+            fs2 = new FileStream(file2, FileMode.Open, FileAccess.Read);
+
+            // Check the file sizes. If they are not the same, the files 
+            // are not the same.
+            if (fs1.Length != fs2.Length)
+            {
+                // Close the file
+                fs1.Close();
+                fs2.Close();
+
+                // Return false to indicate files are different
+                return false;
+            }
+
+            // Read and compare a byte from each file until either a
+            // non-matching set of bytes is found or until the end of
+            // file1 is reached.
+            do
+            {
+                // Read one byte from each file.
+                file1byte = fs1.ReadByte();
+                file2byte = fs2.ReadByte();
+            }
+            while ((file1byte == file2byte) && (file1byte != -1));
+
+            // Close the files.
+            fs1.Close();
+            fs2.Close();
+
+            // Return the success of the comparison. "file1byte" is 
+            // equal to "file2byte" at this point only if the files are 
+            // the same.
+            return ((file1byte - file2byte) == 0);
         }
     }
 }

@@ -163,5 +163,8 @@
   <ItemGroup>
     <EmbeddedResource Include="Kofi.png" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="UpdateBWF.ps1" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
