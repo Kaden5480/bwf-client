@@ -73,6 +73,7 @@ namespace Bag_With_Friends
         Climbing meClimbing;
         Footplacement meFoots;
         PlayerShadow shadow;
+        Barometer barometer;
         public GameObject shadowPrefab;
         //public List<GameObject> shadowPrefabs = new List<GameObject>(0);
         public List<Player> shadowPrefabRequests = new List<Player>(0);
@@ -449,7 +450,7 @@ namespace Bag_With_Friends
             joinButton.image = joinBG;
             joinButton.onClick.AddListener(() =>
             {
-                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 1000)
+                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 100)
                 {
                     lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                     ws.Send($"{{\"data\":\"getRooms\"}}");
@@ -556,7 +557,7 @@ namespace Bag_With_Friends
             makeRoom.image = makeBG;
             makeRoom.onClick.AddListener(() =>
             {
-                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 1000)
+                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 100)
                 {
                     lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                     ws.Send($"{{\"data\":\"makeRoom\", \"id\":\"{playerId}\", \"name\":\"{roomName.text}\", \"pass\":\"{roomName2.text}\"}}");
@@ -864,7 +865,7 @@ namespace Bag_With_Friends
             roomMenuUpdate.image = makeBG;
             roomMenuUpdate.onClick.AddListener(() =>
             {
-                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 1000)
+                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 100)
                 {
                     lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                     ws.Send($"{{\"data\":\"updateRoom\", \"id\":\"{playerId}\", \"name\":\"{roomMenuName.text}\", \"pass\":\"{roomMenuPass.text}\"}}");
@@ -911,7 +912,7 @@ namespace Bag_With_Friends
             leaveRoom.image = leaveBG;
             leaveRoom.onClick.AddListener(() =>
             {
-                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 1000)
+                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 100)
                 {
                     lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                     ws.Send($"{{\"data\":\"leaveRoom\", \"id\":\"{playerId}\"}}");
@@ -1067,56 +1068,13 @@ namespace Bag_With_Friends
             }
             shadowPrefabRequests.Clear();
 
-            if (mePlayer == null)
-            {
-                mePlayer = GameObject.Find("Player");
-            }
+            GetDependencies();
 
-            if (shadow == null)
-            {
-                PlayerShadow[] shads = Resources.FindObjectsOfTypeAll<PlayerShadow>();
-                if (shads.Length != 0)
-                {
-                    shadow = shads[0];
-                }
-            }
-
-            if (meBodyTurning == null)
-            {
-                BodyTurning[] bodyTurns = Resources.FindObjectsOfTypeAll<BodyTurning>();
-                if (bodyTurns.Length != 0)
-                {
-                    meBodyTurning = bodyTurns[0];
-                }
-            }
-
-            if (meClimbing == null)
-            {
-                Climbing[] climbings = Resources.FindObjectsOfTypeAll<Climbing>();
-                if (climbings.Length != 0)
-                {
-                    meClimbing = climbings[0];
-                }
-            }
-
-            if (meFoots == null)
-            {
-                Footplacement[] placements = Resources.FindObjectsOfTypeAll<Footplacement>();
-                if (placements.Length != 0)
-                {
-                    meFoots = placements[0];
-                }
-            }
-
-            if (inRoom && mePlayer != null && shadow != null && meClimbing != null)
+            if (inRoom && mePlayer != null && shadow != null && meClimbing != null && barometer != null)
             {
                 //meFoots.legHolder.localPosition = new Vector3(0, meFoots.legHolderDefaultPos.localPosition.y, 0);
 
-                float height = shadow.transform.position.y;
-                if (GameObject.Find("ResetPoint") != null)
-                {
-                    height -= GameObject.Find("ResetPoint").transform.position.y;
-                }
+                float height = barometer.currentMetresUp;
                 mePlayerPlayer.heightText.text = height.ToString("#.##") + "m";
 
                 string updateString = $"{{\"data\":\"updatePosition\", \"id\":\"{playerId}\", " +
@@ -1236,7 +1194,6 @@ namespace Bag_With_Friends
 
             if (multiplayerMenu.activeSelf || roomMenu.activeSelf)
             {
-
                 InputField newClicked = null;
                 InputField atLeastOne = null;
                 foreach (InputField field in inputFields)
@@ -1314,31 +1271,9 @@ namespace Bag_With_Friends
 
             ws.Send($"{{\"data\":\"switchScene\", \"id\":\"{playerId}\", \"scene\":\"{sceneName}\"}}");
             multiplayerMenu.SetActive(false);
+            roomMenu.SetActive(false);
 
-
-            PlayerShadow[] shads = Resources.FindObjectsOfTypeAll<PlayerShadow>();
-            if (shads.Length != 0)
-            {
-                shadow = shads[0];
-            }
-
-            BodyTurning[] bodyTurns = Resources.FindObjectsOfTypeAll<BodyTurning>();
-            if (bodyTurns.Length != 0)
-            {
-                meBodyTurning = bodyTurns[0];
-            }
-
-            Climbing[] climbings = Resources.FindObjectsOfTypeAll<Climbing>();
-            if (climbings.Length != 0)
-            {
-                meClimbing = climbings[0];
-            }
-
-            Footplacement[] placements = Resources.FindObjectsOfTypeAll<Footplacement>();
-            if (placements.Length != 0)
-            {
-                meFoots = placements[0];
-            }
+            GetDependencies();
 
             foreach (Player player in playersInRoom)
             {
@@ -1364,6 +1299,59 @@ namespace Bag_With_Friends
             lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             ws.Send($"{{\"data\":\"identify\", \"id\":\"{playerId}\", \"name\":\"{playerName}\", \"scene\":\"{SceneManager.GetActiveScene().name}\", \"ping\":{lastPing}}}");
             ws.Send($"{{\"data\":\"getRooms\"}}");
+        }
+
+        void GetDependencies()
+        {
+            if (mePlayer == null)
+            {
+                mePlayer = GameObject.Find("Player");
+            }
+
+            if (shadow == null)
+            {
+                PlayerShadow[] shads = Resources.FindObjectsOfTypeAll<PlayerShadow>();
+                if (shads.Length != 0)
+                {
+                    shadow = shads[0];
+                }
+            }
+
+            if (meBodyTurning == null)
+            {
+                BodyTurning[] bodyTurns = Resources.FindObjectsOfTypeAll<BodyTurning>();
+                if (bodyTurns.Length != 0)
+                {
+                    meBodyTurning = bodyTurns[0];
+                }
+            }
+
+            if (meClimbing == null)
+            {
+                Climbing[] climbings = Resources.FindObjectsOfTypeAll<Climbing>();
+                if (climbings.Length != 0)
+                {
+                    meClimbing = climbings[0];
+                }
+            }
+
+            if (meFoots == null)
+            {
+                Footplacement[] placements = Resources.FindObjectsOfTypeAll<Footplacement>();
+                if (placements.Length != 0)
+                {
+                    meFoots = placements[0];
+                }
+            }
+
+            if (barometer == null)
+            {
+                Barometer[] barometers = Resources.FindObjectsOfTypeAll<Barometer>();
+                if (barometers.Length != 0)
+                {
+                    barometer = barometers[0];
+                }
+            }
         }
 
         long LongRandom(long min, long max)
