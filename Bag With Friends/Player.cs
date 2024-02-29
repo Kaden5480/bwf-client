@@ -58,6 +58,7 @@ namespace Bag_With_Friends
         public Text pingText;
         public Text nameText;
         public Text heightText;
+        public Transform nameBillboard;
 
         public Player(string name, ulong id, string scene, bool host, Multiplayer manager)
         {
@@ -197,6 +198,34 @@ namespace Bag_With_Friends
 
             handLIK.fixTransforms = true;
             handRIK.fixTransforms = true;
+
+            GameObject billboardObject = new GameObject("Name Billboard");
+            nameBillboard = billboardObject.transform;
+            nameBillboard.SetParent(player.transform);
+            nameBillboard.localPosition = new Vector3(0, 0.75f, 0);
+
+            TextMesh nameMesh = billboardObject.AddComponent<TextMesh>();
+            nameMesh.font = manager.arial;
+            nameMesh.text = name;
+            nameMesh.color = new Color(1, 1, 1, 1);
+            nameMesh.alignment = TextAlignment.Center;
+            nameMesh.anchor = TextAnchor.MiddleCenter;
+            nameMesh.fontSize = 128;
+            nameMesh.characterSize = 0.01f;
+
+            GameObject billboardObject2 = new GameObject("Name Billboard2");
+            billboardObject2.transform.SetParent(billboardObject.transform);
+            billboardObject2.transform.localPosition = new Vector3(0, 0, 0.0001f);
+
+            TextMesh nameMesh2 = billboardObject2.AddComponent<TextMesh>();
+            nameMesh2.font = manager.arial;
+            nameMesh2.text = name;
+            nameMesh2.color = new Color(0, 0, 0, 1);
+            nameMesh2.alignment = TextAlignment.Center;
+            nameMesh2.anchor = TextAnchor.MiddleCenter;
+            nameMesh2.fontSize = 128;
+            nameMesh2.characterSize = 0.01f;
+            nameMesh2.fontStyle = FontStyle.Bold;
         }
 
         public void UpdatePosition(Vector3 bodyPosition, float height, Vector3 handLPosition, Vector3 handRPosition, float armStretchL, float armStretchR, Vector3 footLPosition, Vector3 footRPosition, Vector3 footLBendPosition, Vector3 footRBendPosition, Quaternion bodyRotation, Quaternion handLRotation, Quaternion handRRotation, Quaternion footLRotation, Quaternion footRRotation)

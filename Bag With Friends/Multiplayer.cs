@@ -36,7 +36,7 @@ namespace Bag_With_Friends
         bool makingShadowPrefab = false;
         CursorLockMode mouseOnOpen = CursorLockMode.None;
 
-        Font arial;
+        public Font arial;
 
         GameObject multiplayerMenuObject;
         Canvas multiplayerMenuCanvas;
@@ -191,8 +191,6 @@ namespace Bag_With_Friends
                         break;
 
                     case "roomUpdate":
-                        roomMenuName.text = res.GetProperty("name").GetString();
-                        roomMenuPass.text = res.GetProperty("password").GetString();
                         break;
 
                     case "hostUpdate":
@@ -245,6 +243,7 @@ namespace Bag_With_Friends
 
                     case "updatePlayerScene":
                         Player playerToUpdate = playerLookup[res.GetProperty("id").GetUInt64()];
+                        playerToUpdate.Yeet();
                         playerToUpdate.ChangeScene(res.GetProperty("scene").GetString());
                         break;
 
@@ -1151,6 +1150,8 @@ namespace Bag_With_Friends
                 player.handR.transform.rotation = player.handRRotation;
                 player.footL.transform.rotation = player.footLRotation;
                 player.footR.transform.rotation = player.footRRotation;
+
+                player.nameBillboard.rotation = Camera.main.transform.rotation;
             }
 
             if (SceneManager.GetActiveScene().name == "TitleScreen")
@@ -1172,6 +1173,8 @@ namespace Bag_With_Friends
 
             if (Input.GetKeyDown(KeyCode.Tab))
             {
+                multiplayerMenuObject.SetActive(true);
+
                 if (inRoom)
                 {
                     roomMenu.SetActive(!roomMenu.activeSelf);
