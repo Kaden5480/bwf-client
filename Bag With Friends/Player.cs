@@ -72,8 +72,11 @@ namespace Bag_With_Friends
         public void ChangeScene(string newScene)
         {
             manager.LoggerInstance.Msg("player scene " + newScene + ", my scene " + SceneManager.GetActiveScene().name);
-            scene = newScene;
-            UpdateVisual(SceneManager.GetActiveScene().name);
+            if (newScene != scene)
+            {
+                scene = newScene;
+                UpdateVisual(SceneManager.GetActiveScene().name);
+            }
         }
 
         public void UpdateVisual(string meScene)

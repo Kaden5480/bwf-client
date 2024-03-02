@@ -126,9 +126,7 @@ namespace Bag_With_Friends
                         break;
 
                     case "pong":
-                        myPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - lastPing;
-                        lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                        mePlayerPlayer.ping = myPing;
+                        ws.Send($"{{\"data\":\"ping\", \"id\":\"{playerId}\", \"ping\":{lastPing}}}");
                         break;
 
                     case "host":
@@ -252,13 +250,18 @@ namespace Bag_With_Friends
 
                     case "updatePlayerScene":
                         Player playerToUpdate = playerLookup[res.GetProperty("id").GetUInt64()];
-                        playerToUpdate.Yeet();
                         playerToUpdate.ChangeScene(res.GetProperty("scene").GetString());
                         break;
 
                     case "updatePlayerPing":
-                        Player playerToUpdate3 = playerLookup[res.GetProperty("id").GetUInt64()];
-                        playerToUpdate3.ping = res.GetProperty("ping").GetInt64();
+                        if (playerId == res.GetProperty("id").GetUInt64())
+                        {
+                            mePlayerPlayer.ping = res.GetProperty("ping").GetInt64();
+                        } else
+                        {
+                            Player playerToUpdate3 = playerLookup[res.GetProperty("id").GetUInt64()];
+                            playerToUpdate3.ping = res.GetProperty("ping").GetInt64();
+                        }
                         break;
 
                     case "updatePlayerPosition":
@@ -314,9 +317,11 @@ namespace Bag_With_Friends
                 if (args[i] == "-bwf-debug")
                 {
                     debugMode = true;
+                    LoggerInstance.Msg("In debug mode");
                 } else if (args[i] == "-server" && i + 1 < args.Length)
                 {
                     server = args[i + 1];
+                    LoggerInstance.Msg("Custom server");
                 }
             }
 
@@ -498,7 +503,7 @@ namespace Bag_With_Friends
             joinButton.image = joinBG;
             joinButton.onClick.AddListener(() =>
             {
-                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 100)
+                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh)
                 {
                     lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                     ws.Send($"{{\"data\":\"getRooms\"}}");
@@ -605,10 +610,17 @@ namespace Bag_With_Friends
             makeRoom.image = makeBG;
             makeRoom.onClick.AddListener(() =>
             {
-                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 100)
+                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh)
                 {
                     lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    ws.Send($"{{\"data\":\"makeRoom\", \"id\":\"{playerId}\", \"name\":\"{roomName.text}\", \"pass\":\"{roomName2.text}\"}}");
+
+                    if (roomName.text == "")
+                    {
+                        MakeInfoText("The room name can't be blank!", Color.red);
+                    } else
+                    {
+                        ws.Send($"{{\"data\":\"makeRoom\", \"id\":\"{playerId}\", \"name\":\"{roomName.text}\", \"pass\":\"{roomName2.text}\"}}");
+                    }
                 }
             });
 
@@ -913,7 +925,7 @@ namespace Bag_With_Friends
             roomMenuUpdate.image = makeBG;
             roomMenuUpdate.onClick.AddListener(() =>
             {
-                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 100)
+                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh)
                 {
                     lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                     ws.Send($"{{\"data\":\"updateRoom\", \"id\":\"{playerId}\", \"name\":\"{roomMenuName.text}\", \"pass\":\"{roomMenuPass.text}\"}}");
@@ -963,7 +975,7 @@ namespace Bag_With_Friends
             leaveRoom.image = leaveBG;
             leaveRoom.onClick.AddListener(() =>
             {
-                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh + 100)
+                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastRefresh)
                 {
                     lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                     ws.Send($"{{\"data\":\"leaveRoom\", \"id\":\"{playerId}\"}}");
@@ -1095,11 +1107,11 @@ namespace Bag_With_Friends
 
             if (!connected) return;
 
-            if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastPing + 1000)
+            /*if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastPing + 1000)
             {
                 lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 ws.Send($"{{\"data\":\"ping\", \"id\":\"{playerId}\", \"ping\":{lastPing}}}");
-            }
+            }*/
 
             /*for (int i = shadowPrefabs.Count; i < 10; i++)
             {
@@ -1290,19 +1302,7 @@ namespace Bag_With_Friends
                 multiplayerMenu.SetActive(false);
                 roomMenu.SetActive(false);
 
-                GameObject infoTextOb = new GameObject("update");
-                infoTextOb.transform.SetParent(updateContainer.transform);
-                Text infoText = infoTextOb.AddComponent<Text>();
-                infoText.text = "Press ` to lock/unlock Mouse\nPress Tab to open/close menu";
-                infoText.color = new Color(1, 1, 1, 1);
-                infoText.fontSize = 18;
-                infoText.font = arial;
-                infoText.fontStyle = FontStyle.Bold;
-                infoText.alignment = TextAnchor.MiddleCenter;
-                infoText.horizontalOverflow = HorizontalWrapMode.Overflow;
-                infoText.rectTransform.sizeDelta = new Vector2(0, 20);
-                infoTextOb.AddComponent<InfoCloser>();
-                infoTextOb.transform.localScale = multiplayerMenu.transform.localScale;
+                MakeInfoText("Press ` to lock/unlock Mouse\nPress Tab to open/close menu", Color.white);
             }
 
             if (sceneName == "TitleScreen")
@@ -1407,6 +1407,23 @@ namespace Bag_With_Friends
                     barometer = barometers[0];
                 }
             }
+        }
+
+        public void MakeInfoText(string text, Color color)
+        {
+            GameObject infoTextOb = new GameObject("update");
+            infoTextOb.transform.SetParent(updateContainer.transform);
+            Text infoText = infoTextOb.AddComponent<Text>();
+            infoText.text = text;
+            infoText.color = color;
+            infoText.fontSize = 18;
+            infoText.font = arial;
+            infoText.fontStyle = FontStyle.Bold;
+            infoText.alignment = TextAnchor.MiddleCenter;
+            infoText.horizontalOverflow = HorizontalWrapMode.Overflow;
+            infoText.rectTransform.sizeDelta = new Vector2(0, 20);
+            infoTextOb.AddComponent<InfoCloser>();
+            infoTextOb.transform.localScale = multiplayerMenu.transform.localScale;
         }
 
         long LongRandom(long min, long max)
