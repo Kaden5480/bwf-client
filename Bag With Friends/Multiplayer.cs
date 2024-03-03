@@ -190,6 +190,8 @@ namespace Bag_With_Friends
                             roomMenu.SetActive(false);
                             multiplayerMenu.SetActive(true);
                         }
+
+                        ws.Send($"{{\"data\":\"switchScene\", \"id\":\"{playerId}\", \"scene\":\"{SceneManager.GetActiveScene().name}\"}}");
                         break;
 
                     case "roomUpdate":
@@ -209,7 +211,7 @@ namespace Bag_With_Friends
 
                         foreach (Player player in playersInRoom)
                         {
-                            player.host = res.GetProperty("newHost").GetUInt64() == playerId;
+                            player.host = res.GetProperty("newHost").GetUInt64() == player.id;
                             playerListingLookup[player.id].transform.GetChild(0).GetComponent<Text>().text = (player.host ? "[HOST] " : "") + player.name;
                         }
 
@@ -404,6 +406,7 @@ namespace Bag_With_Friends
                 yield return null;
             }
 
+            SceneManager.LoadScene(SceneManager.GetActiveScene().name, LoadSceneMode.Single);
             LoggerInstance.Msg("Making Shadow Prefab Done");
         }
 
@@ -1319,7 +1322,7 @@ namespace Bag_With_Friends
             if (makingShadowPrefab) return;
             if (!connected) return;
 
-            mePlayerPlayer.scene = sceneName;
+
             LoggerInstance.Msg("In scene " + sceneName);
             LoggerInstance.Msg("Shadow Prefab " + shadowPrefab);
             LoggerInstance.Msg("Players in room: " + playersInRoom.Count);
@@ -1333,8 +1336,14 @@ namespace Bag_With_Friends
             foreach (Player player in playersInRoom)
             {
                 LoggerInstance.Msg("fixing " + player.name + "'s scene");
+                if (mePlayerPlayer.scene == sceneName)
+                {
+                    player.Yeet();
+                }
                 player.UpdateVisual(sceneName);
             }
+
+            mePlayerPlayer.scene = sceneName;
         }
 
         public void giveInfo()

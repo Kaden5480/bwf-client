@@ -87,18 +87,18 @@ namespace Bag_With_Friends
 
                 if (body != null)
                 {
-                    GameObject.Destroy(body);
+                    GameObject.DestroyImmediate(body);
                 }
 
                 if (player != null)
                 {
-                    GameObject.Destroy(player);
-                    GameObject.Destroy(handL);
-                    GameObject.Destroy(handR);
-                    GameObject.Destroy(footL);
-                    GameObject.Destroy(footR);
-                    GameObject.Destroy(footLBend);
-                    GameObject.Destroy(footRBend);
+                    GameObject.DestroyImmediate(player);
+                    GameObject.DestroyImmediate(handL);
+                    GameObject.DestroyImmediate(handR);
+                    GameObject.DestroyImmediate(footL);
+                    GameObject.DestroyImmediate(footR);
+                    GameObject.DestroyImmediate(footLBend);
+                    GameObject.DestroyImmediate(footRBend);
                 }
             }
 
@@ -262,18 +262,18 @@ namespace Bag_With_Friends
 
             if (body != null)
             {
-                GameObject.Destroy(body);
+                GameObject.DestroyImmediate(body);
             }
 
             if (player != null)
             {
-                GameObject.Destroy(player);
-                GameObject.Destroy(handL);
-                GameObject.Destroy(handR);
-                GameObject.Destroy(footL);
-                GameObject.Destroy(footR);
-                GameObject.Destroy(footLBend);
-                GameObject.Destroy(footRBend);
+                GameObject.DestroyImmediate(player);
+                GameObject.DestroyImmediate(handL);
+                GameObject.DestroyImmediate(handR);
+                GameObject.DestroyImmediate(footL);
+                GameObject.DestroyImmediate(footR);
+                GameObject.DestroyImmediate(footLBend);
+                GameObject.DestroyImmediate(footRBend);
             }
         }
     }
