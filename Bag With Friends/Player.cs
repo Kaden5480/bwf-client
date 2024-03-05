@@ -83,23 +83,7 @@ namespace Bag_With_Friends
         {
             if (scene != meScene)
             {
-                manager.shadowPrefabRequests.Remove(this);
-
-                if (body != null)
-                {
-                    GameObject.DestroyImmediate(body);
-                }
-
-                if (player != null)
-                {
-                    GameObject.DestroyImmediate(player);
-                    GameObject.DestroyImmediate(handL);
-                    GameObject.DestroyImmediate(handR);
-                    GameObject.DestroyImmediate(footL);
-                    GameObject.DestroyImmediate(footR);
-                    GameObject.DestroyImmediate(footLBend);
-                    GameObject.DestroyImmediate(footRBend);
-                }
+                Yeet(false);
             }
 
             if (scene == "Cabin" || scene == "TitleScreen")
@@ -256,24 +240,44 @@ namespace Bag_With_Friends
             }
         }
 
-        public void Yeet()
+        public void Yeet(bool fast)
         {
             manager.shadowPrefabRequests.Remove(this);
 
-            if (body != null)
+            if (fast)
             {
-                GameObject.DestroyImmediate(body);
-            }
+                if (body != null)
+                {
+                    GameObject.DestroyImmediate(body);
+                }
 
-            if (player != null)
+                if (player != null)
+                {
+                    GameObject.DestroyImmediate(player);
+                    GameObject.DestroyImmediate(handL);
+                    GameObject.DestroyImmediate(handR);
+                    GameObject.DestroyImmediate(footL);
+                    GameObject.DestroyImmediate(footR);
+                    GameObject.DestroyImmediate(footLBend);
+                    GameObject.DestroyImmediate(footRBend);
+                }
+            } else
             {
-                GameObject.DestroyImmediate(player);
-                GameObject.DestroyImmediate(handL);
-                GameObject.DestroyImmediate(handR);
-                GameObject.DestroyImmediate(footL);
-                GameObject.DestroyImmediate(footR);
-                GameObject.DestroyImmediate(footLBend);
-                GameObject.DestroyImmediate(footRBend);
+                if (body != null)
+                {
+                    GameObject.Destroy(body);
+                }
+
+                if (player != null)
+                {
+                    GameObject.Destroy(player);
+                    GameObject.Destroy(handL);
+                    GameObject.Destroy(handR);
+                    GameObject.Destroy(footL);
+                    GameObject.Destroy(footR);
+                    GameObject.Destroy(footLBend);
+                    GameObject.Destroy(footRBend);
+                }
             }
         }
     }

@@ -27,6 +27,7 @@ namespace Bag_With_Friends
     {
         bool debugMode = false;
         string server = "bwf.givo.xyz";
+        bool moreLogs = false;
 
         System.Random rand = new System.Random();
 
@@ -37,7 +38,11 @@ namespace Bag_With_Friends
         bool amHost = false;
         bool inRoom = false;
         bool connected = false;
+        bool wasAlive = false;
+        bool wasConnected = false;
         bool makingShadowPrefab = false;
+        bool freshBoot = true;
+        string myLastScene = "TitleScreen";
         CursorLockMode mouseOnOpen = CursorLockMode.None;
 
         public Font arial;
@@ -67,6 +72,12 @@ namespace Bag_With_Friends
         List<InputField> inputFields = new List<InputField>(0);
         Dictionary<InputField, bool> inputFieldChecks = new Dictionary<InputField, bool>(0);
 
+        long reconnectDelay = 0;
+
+        ulong hostId = 0;
+        ulong roomId = 0;
+        string roomName = "";
+        string roomPass = "";
         List<Player> playersInRoom = new List<Player>(0);
         Dictionary<ulong, Player> playerLookup = new Dictionary<ulong, Player>(0);
         public GameObject playerContainer;
@@ -87,17 +98,25 @@ namespace Bag_With_Friends
         long lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         long myPing = 0;
         long lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        long recoverTimeout = 0;
+
+        float debugSpinTimer = 0;
+        Vector3 debugSpinPos = Vector3.zero;
+        bool debugSpin = false;
+
         public void Connect()
         {
             //ws = new WebSocket("ws://bwf.givo.xyz:3000");
             ws = new WebSocket($"ws://{server}:3000");
+            ws.WaitTime = new TimeSpan(0);
 
             ws.OnMessage += (sender, e) =>
             {
                 JsonDocument doc = JsonDocument.Parse(e.Data);
                 JsonElement res = doc.RootElement;
 
-                if (res.GetProperty("data").GetString() != "updatePlayerPosition" && res.GetProperty("data").GetString() != "pong" && res.GetProperty("data").GetString() != "updatePlayerPing" && debugMode)
+                if (res.GetProperty("data").GetString() != "updatePlayerPosition" && res.GetProperty("data").GetString() != "pong" && res.GetProperty("data").GetString() != "updatePlayerPing" && (debugMode || moreLogs))
                 {
                     //LoggerInstance.Msg("got message " + res.GetProperty("data").GetString());
                     LoggerInstance.Msg(res);
@@ -107,13 +126,41 @@ namespace Bag_With_Friends
                 {
                     case "identify":
                         giveInfo();
+                        
+                        if (wasConnected && inRoom)
+                        {
+                            recoverTimeout = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 60000;
+                            LoggerInstance.Msg("Helping server recover");
+
+                            MakeInfoText("Helping server recover", Color.white);
+                            MakeAndSendRecovery();
+
+                            amHost = false;
+                            foreach (Player player in playersInRoom)
+                            {
+                                if (player != mePlayerPlayer)
+                                {
+                                    player.Yeet(false);
+                                }
+                            }
+                            foreach (GameObject ob in playerListingLookup.Values)
+                            {
+                                GameObject.Destroy(ob);
+                            }
+                            playersInRoom.Clear();
+                            playerLookup.Clear();
+                            shadowPrefabRequests.Clear();
+                            playerListingLookup.Clear();
+
+                            MakePlayerInList(mePlayerPlayer);
+                        }
                         break;
 
                     case "yeet":
                         amHost = false;
                         foreach (Player player in playersInRoom)
                         {
-                            player.Yeet();
+                            player.Yeet(false);
                         }
                         foreach (GameObject ob in playerListingLookup.Values)
                         {
@@ -127,6 +174,7 @@ namespace Bag_With_Friends
 
                     case "pong":
                         ws.Send($"{{\"data\":\"ping\", \"id\":\"{playerId}\", \"ping\":{lastPing}}}");
+                        freshBoot = false;
                         break;
 
                     case "host":
@@ -135,19 +183,7 @@ namespace Bag_With_Friends
 
                     case "error":
                     case "info":
-                        GameObject infoTextOb = new GameObject(res.GetProperty("data").GetString());
-                        infoTextOb.transform.SetParent(updateContainer.transform);
-                        Text infoText = infoTextOb.AddComponent<Text>();
-                        infoText.text = res.GetProperty("info").GetString();
-                        infoText.color = res.GetProperty("data").GetString() == "error" ? new Color(1, 0, 0, 1) : new Color(1, 1, 1, 1);
-                        infoText.fontSize = 18;
-                        infoText.font = arial;
-                        infoText.fontStyle = FontStyle.Bold;
-                        infoText.alignment = TextAnchor.MiddleCenter;
-                        infoText.horizontalOverflow = HorizontalWrapMode.Overflow;
-                        infoText.rectTransform.sizeDelta = new Vector2(0, 20);
-                        infoTextOb.AddComponent<InfoCloser>();
-                        infoTextOb.transform.localScale = multiplayerMenu.transform.localScale;
+                        MakeInfoText(res.GetProperty("info").GetString(), res.GetProperty("data").GetString() == "error" ? new Color(1, 0, 0, 1) : new Color(1, 1, 1, 1));
                         break;
 
                     case "roomList":
@@ -171,8 +207,9 @@ namespace Bag_With_Friends
                         for (int i = 0; i < rooms.Count(); i++)
                         {
                             JsonElement room = rooms.ElementAt(i);
-                            MakeRoomListing(room.GetProperty("name").GetString(), room.GetProperty("id").GetInt16(), room.GetProperty("pass").GetBoolean(), room.GetProperty("players").GetInt16(), room.GetProperty("host").GetString());
+                            MakeRoomListing(room.GetProperty("name").GetString(), room.GetProperty("id").GetUInt64(), room.GetProperty("pass").GetBoolean(), room.GetProperty("players").GetInt16(), room.GetProperty("host").GetString());
                         }
+                        LoggerInstance.Msg(roomContainer.transform.childCount);
                         break;
 
                     case "inRoom":
@@ -195,9 +232,13 @@ namespace Bag_With_Friends
                         break;
 
                     case "roomUpdate":
+                        roomName = res.GetProperty("name").GetString();
+                        roomPass = res.GetProperty("password").GetString();
+                        roomId = res.GetProperty("id").GetUInt64();
                         break;
 
                     case "hostUpdate":
+                        hostId = res.GetProperty("newHost").GetUInt64();
                         amHost = res.GetProperty("newHost").GetUInt64() == playerId;
                         mePlayerPlayer.host = amHost;
                         playerListingLookup[playerId].transform.GetChild(0).GetComponent<Text>().text = (mePlayerPlayer.host ? "[HOST] " : "") + mePlayerPlayer.name;
@@ -228,10 +269,13 @@ namespace Bag_With_Friends
 
                     case "addPlayer":
                         JsonElement recievedPlayer = res.GetProperty("player").EnumerateArray().ElementAt(0);
+
+                        if (recievedPlayer.GetProperty("id").GetUInt64() == playerId) return;
+
                         Player playerToAdd = new Player(recievedPlayer.GetProperty("name").GetString(), recievedPlayer.GetProperty("id").GetUInt64(), recievedPlayer.GetProperty("scene").GetString(), recievedPlayer.GetProperty("host").GetBoolean(), this);
                         playersInRoom.Add(playerToAdd);
                         playerLookup.Add(playerToAdd.id, playerToAdd);
-                        playerToAdd.ChangeScene(recievedPlayer.GetProperty("scene").GetString());
+                        playerToAdd.UpdateVisual(recievedPlayer.GetProperty("scene").GetString());
                         MakePlayerInList(playerToAdd);
 
                         /*GameObject gam = new GameObject("TestOB");
@@ -246,7 +290,7 @@ namespace Bag_With_Friends
                         playerLookup.Remove(playerToRemove.id);
                         GameObject.Destroy(playerListingLookup[playerToRemove.id]);
                         playerListingLookup.Remove(playerToRemove.id);
-                        playerToRemove.Yeet();
+                        playerToRemove.Yeet(false);
                         playerToRemove = null;
                         break;
 
@@ -300,7 +344,7 @@ namespace Bag_With_Friends
                 }
             };
 
-            ws.Connect();
+            ws.ConnectAsync();
         }
 
         public override async void OnApplicationStart()
@@ -324,6 +368,10 @@ namespace Bag_With_Friends
                 {
                     server = args[i + 1];
                     LoggerInstance.Msg("Custom server");
+                } else if (args[i] == "-more-logs")
+                {
+                    moreLogs = true;
+                    LoggerInstance.Msg("More Logs");
                 }
             }
         }
@@ -620,7 +668,7 @@ namespace Bag_With_Friends
             GameObject.DontDestroyOnLoad(playerContainer);
         }
 
-        public void MakeRoomListing(string name, int roomId, bool hasPass, int playerCount, string hostname)
+        public void MakeRoomListing(string name, ulong roomId, bool hasPass, int playerCount, string hostname)
         {
             GameObject room = new GameObject("Room");
             room.transform.SetParent(roomContainer.transform);
@@ -813,7 +861,7 @@ namespace Bag_With_Friends
             placeholder.transform.SetParent(roomOb.transform);
             placeholder.transform.localPosition = Vector3.zero;
             roomMenuRoomName = placeholder.AddComponent<Text>();
-            roomMenuRoomName.text = "Room name";
+            roomMenuRoomName.text = "New name";
             roomMenuRoomName.font = arial;
             roomMenuRoomName.fontSize = 35;
             roomMenuRoomName.alignment = TextAnchor.MiddleLeft;
@@ -1067,7 +1115,41 @@ namespace Bag_With_Friends
                 Connect();
             }
 
-            if (!connected) return;
+            if (wasAlive && !ws.IsAlive && !freshBoot)
+            {
+                MakeInfoText("The server is not responding! Give it a sec to restart or something", Color.red);
+                wasAlive = false;
+                connected = false;
+            }
+
+            if (!wasAlive && !ws.IsAlive && !freshBoot)
+            {
+                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 1000 > reconnectDelay)
+                {
+                    ws.ConnectAsync();
+                    reconnectDelay = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                }
+            }
+
+            if (SceneManager.GetActiveScene().name != mePlayerPlayer.scene && inRoom)
+            {
+                LoggerInstance.Msg("Fixing my scene state");
+                OnSceneWasLoaded(SceneManager.GetActiveScene().buildIndex, SceneManager.GetActiveScene().name);
+            }
+
+            if (debugSpin && mePlayer != null)
+            {
+                debugSpinTimer += Time.deltaTime * 2f;
+                debugSpinTimer = debugSpinTimer % (2 * Mathf.PI);
+
+                Vector3 spinPos = debugSpinPos;
+                spinPos.x += Mathf.Sin(debugSpinTimer);
+                spinPos.z += Mathf.Cos(debugSpinTimer);
+
+                mePlayer.transform.position = spinPos;
+            }
+
+            if (!connected || !ws.IsAlive) return;
 
             /*if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastPing + 1000)
             {
@@ -1099,6 +1181,7 @@ namespace Bag_With_Friends
             {
                 //meFoots.legHolder.localPosition = new Vector3(0, meFoots.legHolderDefaultPos.localPosition.y, 0);
 
+
                 float height = barometer.currentMetresUp;
                 mePlayerPlayer.heightText.text = height.ToString("#.##") + "m";
 
@@ -1119,7 +1202,7 @@ namespace Bag_With_Friends
                     $"\"footLRotation\":[\"{shadow.footIK_L.solver.target.rotation.x}\",\"{shadow.footIK_L.solver.target.rotation.y}\",\"{shadow.footIK_L.solver.target.rotation.z}\",\"{shadow.footIK_L.solver.target.rotation.w}\"], " +
                     $"\"footRRotation\":[\"{shadow.footIK_R.solver.target.rotation.x}\",\"{shadow.footIK_R.solver.target.rotation.y}\",\"{shadow.footIK_R.solver.target.rotation.z}\",\"{shadow.footIK_R.solver.target.rotation.w}\"]" +
                     $"}}";
-                ws.Send(updateString);
+                ws.SendAsync(updateString, null);
 
                 //meFoots.legHolder.localPosition = new Vector3(0, meFoots.legHolderDefaultPos.localPosition.y, meFoots.legHolderDefaultPos.localPosition.z);
             }
@@ -1221,6 +1304,12 @@ namespace Bag_With_Friends
                 Cursor.visible = (multiplayerMenu.activeSelf || roomMenu.activeSelf) || mouseOnOpen == CursorLockMode.None ? true : false;
             }
 
+            if (debugMode && Input.GetKeyDown(KeyCode.KeypadPlus))
+            {
+                debugSpin = !debugSpin;
+                debugSpinPos = mePlayer.transform.position;
+            }
+
             if (multiplayerMenu.activeSelf || roomMenu.activeSelf)
             {
                 InputField newClicked = null;
@@ -1264,7 +1353,9 @@ namespace Bag_With_Friends
                 multiplayerMenu.SetActive(false);
                 roomMenu.SetActive(false);
 
-                MakeInfoText("Press ` to lock/unlock Mouse\nPress Tab to open/close menu", Color.white);
+                MakeInfoText("Current BWF Version: " + Info.SemanticVersion, Color.white);
+                MakeInfoText("Press ` to lock/unlock Mouse", Color.white, 48);
+                MakeInfoText("Press Tab to open/close menu", Color.white, 48);
             }
 
             if (sceneName == "TitleScreen")
@@ -1275,12 +1366,16 @@ namespace Bag_With_Friends
 
             if (sceneName == "TitleScreen" || sceneName == "Cabin")
             {
-                mePlayerPlayer.heightText.text = "";
+                if (mePlayerPlayer.heightText.text != null)
+                {
+                    mePlayerPlayer.heightText.text = "";
+                }
             }
+
+            myLastScene = sceneName;
 
             if (makingShadowPrefab) return;
             if (!connected) return;
-
 
             LoggerInstance.Msg("In scene " + sceneName);
             LoggerInstance.Msg("Shadow Prefab " + shadowPrefab);
@@ -1297,7 +1392,7 @@ namespace Bag_With_Friends
                 LoggerInstance.Msg("fixing " + player.name + "'s scene");
                 if (mePlayerPlayer.scene == sceneName)
                 {
-                    player.Yeet();
+                    player.Yeet(true);
                 }
                 player.UpdateVisual(sceneName);
             }
@@ -1307,21 +1402,29 @@ namespace Bag_With_Friends
 
         public void giveInfo()
         {
+            wasAlive = true;
             connected = true;
             LoggerInstance.Msg("giving identity");
+
             if (!debugMode)
             {
                 playerId = SteamUser.GetSteamID().m_SteamID;
                 playerName = SteamFriends.GetPersonaName();
-            } else
+            } else if (!wasConnected)
             {
                 playerId = (ulong)LongRandom(0, 100000000000000);
-                playerName = RandomString(10);
+                playerName = RandomString(10) + "_DEBUG";
             }
-            mePlayerPlayer = new Player(playerName, playerId, SceneManager.GetActiveScene().name, amHost, this);
+
+            if (mePlayerPlayer == null)
+            {
+                mePlayerPlayer = new Player(playerName, playerId, SceneManager.GetActiveScene().name, amHost, this);
+            }
+
             lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            ws.Send($"{{\"data\":\"identify\", \"id\":\"{playerId}\", \"name\":\"{playerName}\", \"scene\":\"{SceneManager.GetActiveScene().name}\", \"ping\":{lastPing}}}");
+            ws.Send($"{{\"data\":\"identify\", \"id\":\"{playerId}\", \"name\":\"{playerName}\", \"scene\":\"{SceneManager.GetActiveScene().name}\", \"ping\":{lastPing}, \"major\":{Info.SemanticVersion.Major}, \"minor\":{Info.SemanticVersion.Minor}, \"patch\":{Info.SemanticVersion.Patch}, \"wasConnected\":{wasConnected.ToString().ToLower()}}}");
             ws.Send($"{{\"data\":\"getRooms\"}}");
+            wasConnected = true;
         }
 
         void GetDependencies()
@@ -1377,21 +1480,33 @@ namespace Bag_With_Friends
             }
         }
 
-        public void MakeInfoText(string text, Color color)
+        public void MakeInfoText(string text, Color color, int fontSize = 18)
         {
             GameObject infoTextOb = new GameObject("update");
             infoTextOb.transform.SetParent(updateContainer.transform);
             Text infoText = infoTextOb.AddComponent<Text>();
             infoText.text = text;
             infoText.color = color;
-            infoText.fontSize = 18;
+            infoText.fontSize = fontSize;
             infoText.font = arial;
             infoText.fontStyle = FontStyle.Bold;
             infoText.alignment = TextAnchor.MiddleCenter;
             infoText.horizontalOverflow = HorizontalWrapMode.Overflow;
-            infoText.rectTransform.sizeDelta = new Vector2(0, 20);
+            infoText.rectTransform.sizeDelta = new Vector2(0, fontSize * 1.1f);
             infoTextOb.AddComponent<InfoCloser>();
             infoTextOb.transform.localScale = multiplayerMenu.transform.localScale;
+        }
+
+        public void MakeAndSendRecovery()
+        {
+            string recoverString = $"{{\"data\":\"recovery\", ";
+            recoverString += $"\"roomName\":\"{roomName}\", ";
+            recoverString += $"\"roomPass\":\"{roomPass}\", ";
+            recoverString += $"\"roomID\":{roomId}, ";
+            recoverString += $"\"host\":\"{hostId}\", ";
+            recoverString += $"\"id\":\"{playerId}\"}}";
+
+            ws.SendAsync(recoverString, null);
         }
 
         long LongRandom(long min, long max)
