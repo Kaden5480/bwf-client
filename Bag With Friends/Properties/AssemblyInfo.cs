@@ -5,7 +5,7 @@ using MelonLoader;
 using Bag_With_Friends;
 using System;
 
-[assembly: MelonInfo(typeof(Multiplayer), "Bag With Friends", "1.2.0", "Givo(wo)")]
+[assembly: MelonInfo(typeof(Multiplayer), "Bag With Friends", "1.2.3", "Givo(wo)")]
 [assembly: MelonGame("TraipseWare", "Peaks of Yore")]
 [assembly: MelonColor(255, 200, 0, 200)]
 [assembly: MelonAuthorColor(255, 255, 0, 255)]

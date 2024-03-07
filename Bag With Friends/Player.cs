@@ -192,7 +192,7 @@ namespace Bag_With_Friends
             nameBillboard.localPosition = new Vector3(0, 0.75f, 0);
 
             TextMesh nameMesh = billboardObject.AddComponent<TextMesh>();
-            nameMesh.font = manager.arial;
+            nameMesh.font = Multiplayer.arial;
             nameMesh.text = name;
             nameMesh.color = new Color(1, 1, 1, 1);
             nameMesh.alignment = TextAlignment.Center;
@@ -205,7 +205,7 @@ namespace Bag_With_Friends
             billboardObject2.transform.localPosition = new Vector3(0, 0, 0.0001f);
 
             TextMesh nameMesh2 = billboardObject2.AddComponent<TextMesh>();
-            nameMesh2.font = manager.arial;
+            nameMesh2.font = Multiplayer.arial;
             nameMesh2.text = name;
             nameMesh2.color = new Color(0, 0, 0, 1);
             nameMesh2.alignment = TextAlignment.Center;

@@ -20,21 +20,24 @@ using System.IO;
 using System.Collections;
 using System.Net;
 using System.Diagnostics;
+using HarmonyLib;
 
 namespace Bag_With_Friends
 {
     public class Multiplayer : MelonMod
     {
+        static MelonLogger.Instance logger;
+
         bool debugMode = false;
         string server = "bwf.givo.xyz";
         bool moreLogs = false;
 
         System.Random rand = new System.Random();
 
-        WebSocket ws;
-        ulong playerId;
+        static WebSocket ws;
+        static ulong playerId;
         string playerName;
-        Player mePlayerPlayer;
+        static Player mePlayerPlayer;
         bool amHost = false;
         bool inRoom = false;
         bool connected = false;
@@ -45,17 +48,17 @@ namespace Bag_With_Friends
         string myLastScene = "TitleScreen";
         CursorLockMode mouseOnOpen = CursorLockMode.None;
 
-        public Font arial;
+        public static Font arial;
 
         GameObject multiplayerMenuObject;
         Canvas multiplayerMenuCanvas;
-        GameObject multiplayerMenu;
+        static GameObject multiplayerMenu;
         GameObject roomMenu;
         GraphicRaycaster multiplayerRaycaster;
         GameObject roomContainer;
         GameObject playerMenuContainer;
 
-        GameObject updateContainer;
+        static GameObject updateContainer;
         Image roomBack;
         Image playerBack;
 
@@ -113,6 +116,8 @@ namespace Bag_With_Friends
 
             ws.OnMessage += (sender, e) =>
             {
+                lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
                 JsonDocument doc = JsonDocument.Parse(e.Data);
                 JsonElement res = doc.RootElement;
 
@@ -173,8 +178,14 @@ namespace Bag_With_Friends
                         break;
 
                     case "pong":
+                        lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                         ws.Send($"{{\"data\":\"ping\", \"id\":\"{playerId}\", \"ping\":{lastPing}}}");
                         freshBoot = false;
+                        break;
+
+                    case "summit":
+                        Player playerSummit = playerLookup[res.GetProperty("id").GetUInt64()];
+                        MakeInfoText(playerSummit.name + " summited " + res.GetProperty("scene").GetString() + "!", new Color(252f / 255f, 230f / 255f, 121f / 255f), 36);
                         break;
 
                     case "host":
@@ -349,6 +360,7 @@ namespace Bag_With_Friends
 
         public override async void OnApplicationStart()
         {
+            logger = LoggerInstance;
             thisAssembly = MelonAssembly.Assembly;
             arial = new GameObject().AddComponent<TextMesh>().font;
 
@@ -1051,6 +1063,7 @@ namespace Bag_With_Friends
             player.nameText.font = arial;
             player.nameText.lineSpacing = 0.85f;
             player.nameText.alignment = TextAnchor.MiddleLeft;
+            player.nameText.horizontalOverflow = HorizontalWrapMode.Overflow;
 
             GameObject heightOb = new GameObject("Height");
             heightOb.transform.SetParent(playerOB.transform);
@@ -1115,19 +1128,20 @@ namespace Bag_With_Friends
                 Connect();
             }
 
-            if (wasAlive && !ws.IsAlive && !freshBoot)
+            if (wasAlive && lastPing + 15000 < DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() && !freshBoot)
             {
                 MakeInfoText("The server is not responding! Give it a sec to restart or something", Color.red);
                 wasAlive = false;
                 connected = false;
             }
 
-            if (!wasAlive && !ws.IsAlive && !freshBoot)
+            if (!wasAlive && lastPing + 15000 < DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() && !freshBoot)
             {
-                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 1000 > reconnectDelay)
+                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() < reconnectDelay + 1000)
                 {
-                    ws.ConnectAsync();
                     reconnectDelay = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    ws.ConnectAsync();
+                    LoggerInstance.Msg("reconnecting");
                 }
             }
 
@@ -1149,7 +1163,7 @@ namespace Bag_With_Friends
                 mePlayer.transform.position = spinPos;
             }
 
-            if (!connected || !ws.IsAlive) return;
+            if (!connected || lastPing + 15000 < DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) return;
 
             /*if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastPing + 1000)
             {
@@ -1400,6 +1414,14 @@ namespace Bag_With_Friends
             mePlayerPlayer.scene = sceneName;
         }
 
+        [HarmonyPatch(typeof(StamperPeakSummit), "StampJournal", new Type[] {})]
+        private static class Patch
+        {
+            private static void Prefix()
+            {
+                ws.Send($"{{\"data\":\"summit\", \"id\":\"{playerId}\", \"scene\":\"{mePlayerPlayer.scene}\"}}");
+            }
+        }
         public void giveInfo()
         {
             wasAlive = true;
@@ -1480,7 +1502,7 @@ namespace Bag_With_Friends
             }
         }
 
-        public void MakeInfoText(string text, Color color, int fontSize = 18)
+        public static void MakeInfoText(string text, Color color, int fontSize = 18)
         {
             GameObject infoTextOb = new GameObject("update");
             infoTextOb.transform.SetParent(updateContainer.transform);
@@ -1491,8 +1513,10 @@ namespace Bag_With_Friends
             infoText.font = arial;
             infoText.fontStyle = FontStyle.Bold;
             infoText.alignment = TextAnchor.MiddleCenter;
-            infoText.horizontalOverflow = HorizontalWrapMode.Overflow;
-            infoText.rectTransform.sizeDelta = new Vector2(0, fontSize * 1.1f);
+            infoText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            infoText.verticalOverflow = VerticalWrapMode.Overflow;
+
+            infoText.rectTransform.sizeDelta = new Vector2(750, Mathf.CeilToInt(text.Length / 100f) * fontSize * 1.1f);
             infoTextOb.AddComponent<InfoCloser>();
             infoTextOb.transform.localScale = multiplayerMenu.transform.localScale;
         }

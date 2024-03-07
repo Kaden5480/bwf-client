@@ -36,6 +36,9 @@
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>H:\SteamLibrary\steamapps\common\Peaks of Yore\MelonLoader\net35\0Harmony.dll</HintPath>
+    </Reference>
     <Reference Include="Assembly-CSharp">
       <HintPath>H:\SteamLibrary\steamapps\common\Peaks of Yore\Peaks of Yore_Data\Managed\Assembly-CSharp.dll</HintPath>
       <Private>False</Private>
