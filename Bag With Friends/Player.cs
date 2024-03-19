@@ -12,6 +12,8 @@ namespace Bag_With_Friends
 {
     public class Player
     {
+        GameObject parentObject;
+
         Multiplayer manager;
 
         public string name;
@@ -60,6 +62,9 @@ namespace Bag_With_Friends
         public Text heightText;
         public Transform nameBillboard;
 
+        public List<SkinnedMeshRenderer> bodyMaterials = new List<SkinnedMeshRenderer>(0);
+        public Color bodyColor = Color.white;
+
         public Player(string name, ulong id, string scene, bool host, Multiplayer manager)
         {
             this.name = name;
@@ -104,21 +109,30 @@ namespace Bag_With_Friends
             body.name = name + " Body";
             body.transform.localScale = Vector3.one / 4f;
             GameObject.Destroy(body.GetComponent<Collider>());
-            body.transform.SetParent(manager.playerContainer.transform);*/
+            body.transform.SetParent(parentObject.transform);*/
+
+            parentObject = new GameObject(name);
+            GameObject.DontDestroyOnLoad(parentObject);
+            parentObject.transform.SetParent(manager.playerContainer.transform);
 
             player.name = name + " Body";
-            player.transform.SetParent(manager.playerContainer.transform);
+            player.transform.SetParent(parentObject.transform);
 
+
+            bodyMaterials.Clear();
             SkinnedMeshRenderer[] skinnedMeshes = Multiplayer.GetAllSkinnedMeshRenderersInChildren(player);
             for (int i = 0; i < skinnedMeshes.Length; i++)
             {
                 SkinnedMeshRenderer skin = skinnedMeshes[i];
                 skin.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
-                skin.material.renderQueue = 1000;
-                skin.material.color = new Color(1, 1, 1, 1);
-                skin.material.shaderKeywords = new string[0] { };
+                //skin.material.renderQueue = 2450;
+                //skin.material.color = bodyColor;
+                //skin.material.shaderKeywords = new string[0] { };
 
-                //manager.LoggerInstance.Msg(skin.name);
+                skin.material = new Material(Shader.Find("Legacy Shaders/Transparent/VertexLit"));
+                skin.material.color = bodyColor;
+
+                bodyMaterials.Add(skin);
             }
 
             handL = new GameObject(name + " HandL");
@@ -126,42 +140,42 @@ namespace Bag_With_Friends
             handL.name = name + " HandL";
             handL.transform.localScale = Vector3.one / 4f;
             GameObject.Destroy(handL.GetComponent<Collider>());*/
-            handL.transform.SetParent(manager.playerContainer.transform);
+            handL.transform.SetParent(parentObject.transform);
 
             handR = new GameObject(name + " HandR");
             /*handR = GameObject.CreatePrimitive(PrimitiveType.Cube);
             handR.name = name + " HandR";
             handR.transform.localScale = Vector3.one / 4f;
             GameObject.Destroy(handR.GetComponent<Collider>());*/
-            handR.transform.SetParent(manager.playerContainer.transform);
+            handR.transform.SetParent(parentObject.transform);
 
             footL = new GameObject(name + " FootL");
             /*footL = GameObject.CreatePrimitive(PrimitiveType.Cube);
             footL.name = name + " FootL";
             footL.transform.localScale = Vector3.one / 4f;
             GameObject.Destroy(footL.GetComponent<Collider>());*/
-            footL.transform.SetParent(manager.playerContainer.transform);
+            footL.transform.SetParent(parentObject.transform);
 
             footR = new GameObject(name + " FootR");
             /*footR = GameObject.CreatePrimitive(PrimitiveType.Cube);
             footR.name = name + " FootR";
             footR.transform.localScale = Vector3.one / 4f;
             GameObject.Destroy(footR.GetComponent<Collider>());*/
-            footR.transform.SetParent(manager.playerContainer.transform);
+            footR.transform.SetParent(parentObject.transform);
 
             footLBend = new GameObject(name + " FootL Bend");
             /*footLBend = GameObject.CreatePrimitive(PrimitiveType.Cube);
             footLBend.name = name + " FootL Bend";
             footLBend.transform.localScale = Vector3.one / 4f;
             GameObject.Destroy(footLBend.GetComponent<Collider>());*/
-            footLBend.transform.SetParent(manager.playerContainer.transform);
+            footLBend.transform.SetParent(parentObject.transform);
 
             footRBend = new GameObject(name + " FootR Bend");
             /*footRBend = GameObject.CreatePrimitive(PrimitiveType.Cube);
             footRBend.name = name + " FootR Bend";
             footRBend.transform.localScale = Vector3.one / 4f;
             GameObject.Destroy(footRBend.GetComponent<Collider>());*/
-            footRBend.transform.SetParent(manager.playerContainer.transform);
+            footRBend.transform.SetParent(parentObject.transform);
 
             handLIK = player.transform.GetChild(5).GetComponent<ArmIK>();
             handRIK = player.transform.GetChild(6).GetComponent<ArmIK>();
@@ -240,9 +254,34 @@ namespace Bag_With_Friends
             }
         }
 
+        public void ChangeColor(Color color)
+        {
+            bodyColor = color;
+
+            if (player != null)
+            {
+                if (color.a >= 0.95)
+                {
+                    foreach (SkinnedMeshRenderer skin in bodyMaterials)
+                    {
+                        skin.material = new Material(Shader.Find("Legacy Shaders/Diffuse"));
+                        skin.material.color = bodyColor;
+                    }
+                } else
+                {
+                    foreach (SkinnedMeshRenderer skin in bodyMaterials)
+                    {
+                        skin.material = new Material(Shader.Find("Legacy Shaders/Transparent/VertexLit"));
+                        skin.material.color = bodyColor;
+                    }
+                }
+            }
+        }
+
         public void Yeet(bool fast)
         {
             manager.shadowPrefabRequests.Remove(this);
+            bodyMaterials.Clear();
 
             if (fast)
             {
@@ -253,6 +292,7 @@ namespace Bag_With_Friends
 
                 if (player != null)
                 {
+                    GameObject.DestroyImmediate(parentObject);
                     GameObject.DestroyImmediate(player);
                     GameObject.DestroyImmediate(handL);
                     GameObject.DestroyImmediate(handR);
@@ -270,6 +310,7 @@ namespace Bag_With_Friends
 
                 if (player != null)
                 {
+                    GameObject.Destroy(parentObject);
                     GameObject.Destroy(player);
                     GameObject.Destroy(handL);
                     GameObject.Destroy(handR);

@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using MelonLoader;
 using UnityEngine;
 using UnityEngine.UI;
@@ -10,17 +9,20 @@ using UnityEngine.SceneManagement;
 using UnityEngine.EventSystems;
 using WebSocketSharp;
 using Steamworks;
+using Galaxy.Api;
 using System.Collections.ObjectModel;
 using System.Management;
 using System.Threading.Tasks;
 using System.Threading;
 using System.Text.Json;
 using System.Web.Security;
+using System.Security.Cryptography;
 using System.IO;
 using System.Collections;
 using System.Net;
 using System.Diagnostics;
 using HarmonyLib;
+using System.Buffers.Text;
 
 namespace Bag_With_Friends
 {
@@ -87,6 +89,8 @@ namespace Bag_With_Friends
         public Dictionary<string, Transform> sceneSplitters = new Dictionary<string, Transform>(0);
         Dictionary<ulong, GameObject> playerListingLookup = new Dictionary<ulong, GameObject>(0);
 
+        Shader transparentDiffuse;
+        Color myColor = Color.white;
         GameObject mePlayer;
         BodyTurning meBodyTurning;
         Climbing meClimbing;
@@ -184,8 +188,14 @@ namespace Bag_With_Friends
                         break;
 
                     case "summit":
-                        Player playerSummit = playerLookup[res.GetProperty("id").GetUInt64()];
+                        Player playerSummit = playerLookup.ContainsKey(res.GetProperty("id").GetUInt64()) ? playerLookup[res.GetProperty("id").GetUInt64()] : mePlayerPlayer;
                         MakeInfoText(playerSummit.name + " summited " + res.GetProperty("scene").GetString() + "!", new Color(252f / 255f, 230f / 255f, 121f / 255f), 36);
+                        break;
+
+                    case "changeColor":
+                        Player playerColor = playerLookup[res.GetProperty("id").GetUInt64()];
+                        JsonElement.ArrayEnumerator color2 = res.GetProperty("color").EnumerateArray();
+                        playerColor.ChangeColor(new Color(float.Parse(color2.ElementAt(0).GetString()), float.Parse(color2.ElementAt(1).GetString()), float.Parse(color2.ElementAt(2).GetString()), float.Parse(color2.ElementAt(3).GetString())));
                         break;
 
                     case "host":
@@ -282,8 +292,14 @@ namespace Bag_With_Friends
                         JsonElement recievedPlayer = res.GetProperty("player").EnumerateArray().ElementAt(0);
 
                         if (recievedPlayer.GetProperty("id").GetUInt64() == playerId) return;
+                        if (playerLookup.ContainsKey(recievedPlayer.GetProperty("id").GetUInt64())) return;
 
                         Player playerToAdd = new Player(recievedPlayer.GetProperty("name").GetString(), recievedPlayer.GetProperty("id").GetUInt64(), recievedPlayer.GetProperty("scene").GetString(), recievedPlayer.GetProperty("host").GetBoolean(), this);
+
+                        JsonElement.ArrayEnumerator color = res.GetProperty("color").EnumerateArray();
+                        playerToAdd.bodyColor = new Color(float.Parse(color.ElementAt(0).GetString()), float.Parse(color.ElementAt(1).GetString()), float.Parse(color.ElementAt(2).GetString()), float.Parse(color.ElementAt(3).GetString()));
+                        LoggerInstance.Msg(playerToAdd.bodyColor);
+
                         playersInRoom.Add(playerToAdd);
                         playerLookup.Add(playerToAdd.id, playerToAdd);
                         playerToAdd.UpdateVisual(recievedPlayer.GetProperty("scene").GetString());
@@ -311,14 +327,8 @@ namespace Bag_With_Friends
                         break;
 
                     case "updatePlayerPing":
-                        if (playerId == res.GetProperty("id").GetUInt64())
-                        {
-                            mePlayerPlayer.ping = res.GetProperty("ping").GetInt64();
-                        } else
-                        {
-                            Player playerToUpdate3 = playerLookup[res.GetProperty("id").GetUInt64()];
-                            playerToUpdate3.ping = res.GetProperty("ping").GetInt64();
-                        }
+                        Player playerToUpdate3 = playerLookup.ContainsKey(res.GetProperty("id").GetUInt64()) ? playerLookup[res.GetProperty("id").GetUInt64()] : mePlayerPlayer;
+                        playerToUpdate3.ping = res.GetProperty("ping").GetInt64();
                         break;
 
                     case "updatePlayerPosition":
@@ -641,7 +651,9 @@ namespace Bag_With_Friends
                         MakeInfoText("The room name can't be blank!", Color.red);
                     } else
                     {
-                        ws.Send($"{{\"data\":\"makeRoom\", \"id\":\"{playerId}\", \"name\":\"{roomName.text}\", \"pass\":\"{roomName2.text}\"}}");
+                        string[] assemblyHashes = GetAssemblyHashes();
+
+                        ws.Send($"{{\"data\":\"makeRoom\", \"id\":\"{playerId}\", \"name\":\"{roomName.text}\", \"pass\":\"{roomName2.text}\", \"hash\":\"{assemblyHashes[0]}\", \"hash2\":\"{assemblyHashes[1]}\"}}");
                     }
                 }
             });
@@ -804,7 +816,10 @@ namespace Bag_With_Friends
                     password = passInput.text;
                 }
                 LoggerInstance.Msg("Trying to join room " + name + " with password " + password);
-                ws.Send($"{{\"data\":\"joinRoom\", \"id\":\"{playerId}\", \"room\":{roomId}, \"pass\":\"{password}\"}}");
+
+                string[] assemblyHashes = GetAssemblyHashes();
+
+                ws.Send($"{{\"data\":\"joinRoom\", \"id\":\"{playerId}\", \"room\":{roomId}, \"pass\":\"{password}\", \"hash\":\"{assemblyHashes[0]}\", \"hash2\":\"{assemblyHashes[1]}\"}}");
             });
 
             room.transform.localScale = multiplayerMenu.transform.localScale;
@@ -1001,6 +1016,11 @@ namespace Bag_With_Friends
                 {
                     lastRefresh = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                     ws.Send($"{{\"data\":\"leaveRoom\", \"id\":\"{playerId}\"}}");
+
+                    for (int i = 0; i < playerMenuContainer.transform.childCount; i++)
+                    {
+                        GameObject.Destroy(playerMenuContainer.transform.GetChild(i));
+                    }
                 }
             });
 
@@ -1123,7 +1143,7 @@ namespace Bag_With_Friends
 
             if (makingShadowPrefab) return;
 
-            if (SteamManager.Initialized && ws == null)
+            if ((SteamManager.Initialized || GalaxyManager.Instance.GalaxyFullyInitialized) && ws == null)
             {
                 Connect();
             }
@@ -1135,7 +1155,7 @@ namespace Bag_With_Friends
                 connected = false;
             }
 
-            if (!wasAlive && lastPing + 15000 < DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() && !freshBoot)
+            if (!wasAlive && lastPing + (inRoom ? 5000 : 15000) < DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() && !freshBoot)
             {
                 if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() < reconnectDelay + 1000)
                 {
@@ -1163,7 +1183,7 @@ namespace Bag_With_Friends
                 mePlayer.transform.position = spinPos;
             }
 
-            if (!connected || lastPing + 15000 < DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) return;
+            if (!connected || lastPing + (inRoom ? 5000 : 15000) < DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) return;
 
             /*if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastPing + 1000)
             {
@@ -1324,6 +1344,12 @@ namespace Bag_With_Friends
                 debugSpinPos = mePlayer.transform.position;
             }
 
+            if (debugMode && Input.GetKeyDown(KeyCode.KeypadMinus))
+            {
+                myColor = new Color(UnityEngine.Random.Range(0f, 1f), UnityEngine.Random.Range(0f, 1f), UnityEngine.Random.Range(0f, 1f), UnityEngine.Random.Range(0f, 1f));
+                ws.Send($"{{\"data\":\"changeColor\", \"id\":\"{playerId}\", \"color\":[\"{myColor.r}\", \"{myColor.g}\", \"{myColor.b}\", \"{myColor.a}\"]}}");
+            }
+
             if (multiplayerMenu.activeSelf || roomMenu.activeSelf)
             {
                 InputField newClicked = null;
@@ -1430,8 +1456,15 @@ namespace Bag_With_Friends
 
             if (!debugMode)
             {
-                playerId = SteamUser.GetSteamID().m_SteamID;
-                playerName = SteamFriends.GetPersonaName();
+                if (SteamManager.Initialized)
+                {
+                    playerId = SteamUser.GetSteamID().m_SteamID;
+                    playerName = SteamFriends.GetPersonaName();
+                } else if (GalaxyManager.Instance.GalaxyFullyInitialized)
+                {
+                    playerId = GalaxyManager.Instance.MyGalaxyID.ToUint64();
+                    playerName = GalaxyManager.Instance.name;
+                }
             } else if (!wasConnected)
             {
                 playerId = (ulong)LongRandom(0, 100000000000000);
@@ -1446,6 +1479,7 @@ namespace Bag_With_Friends
             lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             ws.Send($"{{\"data\":\"identify\", \"id\":\"{playerId}\", \"name\":\"{playerName}\", \"scene\":\"{SceneManager.GetActiveScene().name}\", \"ping\":{lastPing}, \"major\":{Info.SemanticVersion.Major}, \"minor\":{Info.SemanticVersion.Minor}, \"patch\":{Info.SemanticVersion.Patch}, \"wasConnected\":{wasConnected.ToString().ToLower()}}}");
             ws.Send($"{{\"data\":\"getRooms\"}}");
+            ws.Send($"{{\"data\":\"changeColor\", \"id\":\"{playerId}\", \"color\":[\"{myColor.r}\", \"{myColor.g}\", \"{myColor.b}\", \"{myColor.a}\"]}}");
             wasConnected = true;
         }
 
@@ -1504,21 +1538,52 @@ namespace Bag_With_Friends
 
         public static void MakeInfoText(string text, Color color, int fontSize = 18)
         {
-            GameObject infoTextOb = new GameObject("update");
-            infoTextOb.transform.SetParent(updateContainer.transform);
-            Text infoText = infoTextOb.AddComponent<Text>();
-            infoText.text = text;
-            infoText.color = color;
-            infoText.fontSize = fontSize;
-            infoText.font = arial;
-            infoText.fontStyle = FontStyle.Bold;
-            infoText.alignment = TextAnchor.MiddleCenter;
-            infoText.horizontalOverflow = HorizontalWrapMode.Wrap;
-            infoText.verticalOverflow = VerticalWrapMode.Overflow;
+            List<string> textLines = new List<string>(0);
+            string remaining = text;
 
-            infoText.rectTransform.sizeDelta = new Vector2(750, Mathf.CeilToInt(text.Length / 100f) * fontSize * 1.1f);
-            infoTextOb.AddComponent<InfoCloser>();
-            infoTextOb.transform.localScale = multiplayerMenu.transform.localScale;
+            while (remaining.Length > 50)
+            {
+                string split = "";
+                for (int i = 49; i >= 0; i--)
+                {
+                    if (remaining[i] == ' ')
+                    {
+                        split = remaining.Substring(0, i);
+                        i = -1;
+                    }
+                }
+
+                if (split == "")
+                {
+                    split = remaining.Substring(0, 50);
+                    remaining = remaining.Substring(50, remaining.Length - 50);
+                } else
+                {
+                    remaining = remaining.Substring(split.Length, remaining.Length - split.Length);
+                }
+
+                textLines.Add(split);
+            }
+
+            textLines.Add(remaining);
+
+            foreach (string line in textLines)
+            {
+                GameObject infoTextOb = new GameObject("update");
+                infoTextOb.transform.SetParent(updateContainer.transform);
+                Text infoText = infoTextOb.AddComponent<Text>();
+                infoText.text = line;
+                infoText.color = color;
+                infoText.fontSize = fontSize;
+                infoText.font = arial;
+                infoText.fontStyle = FontStyle.Bold;
+                infoText.alignment = TextAnchor.MiddleCenter;
+                infoText.horizontalOverflow = HorizontalWrapMode.Wrap;
+                infoText.verticalOverflow = VerticalWrapMode.Overflow;
+                infoText.rectTransform.sizeDelta = new Vector2(1920, fontSize * 1.1f);
+                infoTextOb.AddComponent<InfoCloser>();
+                infoTextOb.transform.localScale = multiplayerMenu.transform.localScale;
+            }
         }
 
         public void MakeAndSendRecovery()
@@ -1531,6 +1596,22 @@ namespace Bag_With_Friends
             recoverString += $"\"id\":\"{playerId}\"}}";
 
             ws.SendAsync(recoverString, null);
+        }
+
+        public string[] GetAssemblyHashes()
+        {
+            FileStream assemblySteam = new FileStream("./Peaks of Yore_Data/Managed/Assembly-CSharp.dll", FileMode.Open);
+            FileStream assembly2Steam = new FileStream("./Peaks of Yore_Data/Managed/Assembly-CSharp-firstpass.dll", FileMode.Open);
+
+            SHA256 assemblyHash = SHA256.Create();
+            byte[] assemblyHashBytes = assemblyHash.ComputeHash(assemblySteam);
+            string assemblyHashString = Convert.ToBase64String(assemblyHashBytes);
+
+            SHA256 assembly2Hash = SHA256.Create();
+            byte[] assembly2HashBytes = assemblyHash.ComputeHash(assembly2Steam);
+            string assembly2HashString = Convert.ToBase64String(assembly2HashBytes);
+
+            return new string[] { assemblyHashString, assembly2HashString };
         }
 
         long LongRandom(long min, long max)

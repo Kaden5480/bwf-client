@@ -51,6 +51,10 @@
       <HintPath>H:\SteamLibrary\steamapps\common\Peaks of Yore\Peaks of Yore_Data\Managed\com.rlabrecque.steamworks.net.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="GalaxyCSharp">
+      <HintPath>H:\SteamLibrary\steamapps\common\Peaks of Yore\Peaks of Yore_Data\Managed\GalaxyCSharp.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="MelonLoader">
       <HintPath>H:\SteamLibrary\steamapps\common\Peaks of Yore\MelonLoader\net35\MelonLoader.dll</HintPath>
       <Private>False</Private>
