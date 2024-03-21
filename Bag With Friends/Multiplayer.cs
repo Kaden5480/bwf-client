@@ -33,8 +33,8 @@ namespace Bag_With_Friends
         bool debugMode = false;
         string server = "bwf.givo.xyz";
         bool moreLogs = false;
-        bool compMode = false;
-        bool casterMode = false;
+        static bool compMode = false;
+        static bool casterMode = false;
 
         System.Random rand = new System.Random();
 
@@ -837,7 +837,7 @@ namespace Bag_With_Friends
             Text host = hostOb.AddComponent<Text>();
             host.rectTransform.sizeDelta = new Vector2(230, 100);
             host.text = "Host: \n" + hostname;
-            host.fontSize = 36;
+            host.fontSize = 18;
             host.font = arial;
             host.alignment = TextAnchor.MiddleCenter;
             host.color = new Color(0, 0, 1, 1);
@@ -1486,6 +1486,12 @@ namespace Bag_With_Friends
                 CramponsImage6.color = new Color(0.5f, 0.5f, 0.5f, 1);
                 CramponsImage10.color = new Color(0.5f, 0.5f, 0.5f, 1);
 
+                StemFoot[] foots = Resources.FindObjectsOfTypeAll<StemFoot>();
+                if (foots.Length != 0)
+                {
+                    foots[0].Invoke("LoadStemming", 0f);
+                }
+
                 UpdateName(cacheName);
             });
 
@@ -1501,6 +1507,12 @@ namespace Bag_With_Friends
                 CramponsImage6.color = new Color(0.9f, 0.9f, 0.9f, 1);
                 CramponsImage10.color = new Color(0.5f, 0.5f, 0.5f, 1);
 
+                StemFoot[] foots = Resources.FindObjectsOfTypeAll<StemFoot>();
+                if (foots.Length != 0)
+                {
+                    foots[0].Invoke("LoadStemming", 0f);
+                }
+
                 UpdateName(cacheName);
             });
 
@@ -1515,6 +1527,12 @@ namespace Bag_With_Friends
                 noCramponsImage.color = new Color(0.5f, 0.5f, 0.5f, 1);
                 CramponsImage6.color = new Color(0.5f, 0.5f, 0.5f, 1);
                 CramponsImage10.color = new Color(0.9f, 0.9f, 0.9f, 1);
+
+                StemFoot[] foots = Resources.FindObjectsOfTypeAll<StemFoot>();
+                if (foots.Length != 0)
+                {
+                    foots[0].Invoke("LoadStemming", 0f);
+                }
 
                 UpdateName(cacheName);
             });
@@ -2048,6 +2066,12 @@ namespace Bag_With_Friends
                     GameManager.control.coffee = coffeeB;
                     GameManager.control.isUsingPipe = pipeB;
                     GameManager.control.iceAxes = axesB;
+
+                    StemFoot[] foots = Resources.FindObjectsOfTypeAll<StemFoot>();
+                    if (foots.Length != 0)
+                    {
+                        foots[0].Invoke("LoadStemming", 0f);
+                    }
                 }
 
                 multiplayerMenuObject.SetActive(true);
@@ -2174,6 +2198,12 @@ namespace Bag_With_Friends
                 GameManager.control.coffee = coffeeB;
                 GameManager.control.isUsingPipe = pipeB;
                 GameManager.control.iceAxes = axesB;
+
+                StemFoot[] foots = Resources.FindObjectsOfTypeAll<StemFoot>();
+                if (foots.Length != 0)
+                {
+                    foots[0].Invoke("LoadStemming", 0f);
+                }
             }
 
             if (makingShadowPrefab) return;
@@ -2218,6 +2248,15 @@ namespace Bag_With_Friends
             private static void Prefix()
             {
                 ws.Send($"{{\"data\":\"summit\", \"id\":\"{playerId}\", \"scene\":\"{mePlayerPlayer.scene}\"}}");
+            }
+        }
+
+        [HarmonyPatch(typeof(NPCEvents), "CheckProgress", new Type[] { })]
+        private static class NPCEventPatch
+        {
+            private static bool Prefix()
+            {
+                return !(compMode || casterMode);
             }
         }
 
