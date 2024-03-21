@@ -33,11 +33,13 @@ namespace Bag_With_Friends
         bool debugMode = false;
         string server = "bwf.givo.xyz";
         bool moreLogs = false;
+        bool compMode = false;
 
         System.Random rand = new System.Random();
 
         static WebSocket ws;
         static ulong playerId;
+        string cacheName;
         string playerName;
         static Player mePlayerPlayer;
         bool amHost = false;
@@ -59,6 +61,7 @@ namespace Bag_With_Friends
         GraphicRaycaster multiplayerRaycaster;
         GameObject roomContainer;
         GameObject playerMenuContainer;
+        GameObject playerSettingsMenu;
 
         static GameObject updateContainer;
         Image roomBack;
@@ -70,6 +73,16 @@ namespace Bag_With_Friends
         InputField roomMenuPass;
         GameObject updateRoomButton;
         UnityEngine.UI.Button roomMenuUpdate;
+
+        Image noCrampons;
+        Image crampons6;
+        Image crampons10;
+        Image noCoffee;
+        Image yesCoffe;
+        Image noPipe;
+        Image yesPipe;
+        Image noAxes;
+        Image yesAxes;
 
         AssetBundle UIBundle;
         System.Reflection.Assembly thisAssembly;
@@ -89,6 +102,9 @@ namespace Bag_With_Friends
         public Dictionary<string, Transform> sceneSplitters = new Dictionary<string, Transform>(0);
         Dictionary<ulong, GameObject> playerListingLookup = new Dictionary<ulong, GameObject>(0);
 
+        Color playerColor = new Color(1, 1, 1, 1);
+        Image playerColorPreview;
+
         Shader transparentDiffuse;
         Color myColor = Color.white;
         GameObject mePlayer;
@@ -97,10 +113,17 @@ namespace Bag_With_Friends
         Footplacement meFoots;
         PlayerShadow shadow;
         Barometer barometer;
+        static GameObject pipeObject;
         public GameObject shadowPrefab;
         //public List<GameObject> shadowPrefabs = new List<GameObject>(0);
         public List<Player> shadowPrefabRequests = new List<Player>(0);
         public List<Player> bannedPlayers = new List<Player>(0);
+
+        bool cramponsB = false;
+        bool cramponUpgradeB = false;
+        bool coffeeB = false;
+        bool pipeB = false;
+        bool axesB = false;
 
         long lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         long myPing = 0;
@@ -112,6 +135,7 @@ namespace Bag_With_Friends
         Vector3 debugSpinPos = Vector3.zero;
         bool debugSpin = false;
 
+        long cheatEngineCheck = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         public void Connect()
         {
             //ws = new WebSocket("ws://bwf.givo.xyz:3000");
@@ -326,9 +350,19 @@ namespace Bag_With_Friends
                         playerToUpdate.ChangeScene(res.GetProperty("scene").GetString());
                         break;
 
+                    case "playerNewName":
+                        Player playerToUpdate4 = playerLookup.ContainsKey(res.GetProperty("id").GetUInt64()) ? playerLookup[res.GetProperty("id").GetUInt64()] : mePlayerPlayer;
+                        playerToUpdate4.name = res.GetProperty("newName").GetString();
+                        break;
+
                     case "updatePlayerPing":
                         Player playerToUpdate3 = playerLookup.ContainsKey(res.GetProperty("id").GetUInt64()) ? playerLookup[res.GetProperty("id").GetUInt64()] : mePlayerPlayer;
                         playerToUpdate3.ping = res.GetProperty("ping").GetInt64();
+                        break;
+
+                    case "updatePlayerName":
+                        Player playerNameUpdate = playerLookup.ContainsKey(res.GetProperty("id").GetUInt64()) ? playerLookup[res.GetProperty("id").GetUInt64()] : mePlayerPlayer;
+                        playerNameUpdate.name = res.GetProperty("name").GetString();
                         break;
 
                     case "updatePlayerPosition":
@@ -372,7 +406,6 @@ namespace Bag_With_Friends
         {
             logger = LoggerInstance;
             thisAssembly = MelonAssembly.Assembly;
-            arial = new GameObject().AddComponent<TextMesh>().font;
 
             makingShadowPrefab = true;
             MelonCoroutines.Start(MakeShadowPrefab());
@@ -394,6 +427,9 @@ namespace Bag_With_Friends
                 {
                     moreLogs = true;
                     LoggerInstance.Msg("More Logs");
+                } else if (args[i] == "-comp-mode")
+                {
+                    compMode = true;
                 }
             }
         }
@@ -687,6 +723,31 @@ namespace Bag_With_Friends
             {
                 Application.OpenURL("https://ko-fi.com/givowo");
             });
+
+            GameObject playerSettingsButtonOb = new GameObject("Player Settings Button");
+            playerSettingsButtonOb.transform.SetParent(multiplayerMenu.transform);
+            UnityEngine.UI.Button playerSettingsButton = playerSettingsButtonOb.AddComponent<UnityEngine.UI.Button>();
+            Image playerSettings = playerSettingsButtonOb.AddComponent<Image>();
+            playerSettings.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            playerSettings.rectTransform.sizeDelta = new Vector2(50, 50);
+            playerSettings.rectTransform.pivot = new Vector2(0, 1);
+            playerSettings.rectTransform.anchoredPosition = new Vector2(-910, 390);
+            playerSettingsButton.image = playerSettings;
+            playerSettingsButton.onClick.AddListener(() =>
+            {
+                multiplayerMenu.SetActive(false);
+                playerSettingsMenu.SetActive(true);
+            });
+
+            GameObject playerSettingsOb = new GameObject("Player Settings");
+            playerSettingsOb.transform.SetParent(playerSettingsButtonOb.transform);
+            Text playerSettingsText = playerSettingsOb.AddComponent<Text>();
+            playerSettingsText.font = arial;
+            playerSettingsText.fontSize = 40;
+            playerSettingsText.alignment = TextAnchor.MiddleCenter;
+            playerSettingsText.text = "*";
+            playerSettingsText.color = Color.black;
+            playerSettingsText.rectTransform.sizeDelta = new Vector2(50, 50);
 
             playerContainer = new GameObject("Players");
             GameObject.DontDestroyOnLoad(playerContainer);
@@ -1062,6 +1123,31 @@ namespace Bag_With_Friends
                 sceneOb.transform.localScale = roomMenu.transform.localScale;
                 sceneSplitters.Add(scene, sceneOb.transform);
             }
+
+            GameObject playerSettingsButtonOb = new GameObject("Player Settings Button");
+            playerSettingsButtonOb.transform.SetParent(roomMenu.transform);
+            UnityEngine.UI.Button playerSettingsButton = playerSettingsButtonOb.AddComponent<UnityEngine.UI.Button>();
+            Image playerSettings = playerSettingsButtonOb.AddComponent<Image>();
+            playerSettings.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            playerSettings.rectTransform.sizeDelta = new Vector2(50, 50);
+            playerSettings.rectTransform.pivot = new Vector2(0, 1);
+            playerSettings.rectTransform.anchoredPosition = new Vector2(-910, 390);
+            playerSettingsButton.image = playerSettings;
+            playerSettingsButton.onClick.AddListener(() =>
+            {
+                roomMenu.SetActive(false);
+                playerSettingsMenu.SetActive(true);
+            });
+
+            GameObject playerSettingsOb = new GameObject("Player Settings");
+            playerSettingsOb.transform.SetParent(playerSettingsButtonOb.transform);
+            Text playerSettingsText = playerSettingsOb.AddComponent<Text>();
+            playerSettingsText.font = arial;
+            playerSettingsText.fontSize = 40;
+            playerSettingsText.alignment = TextAnchor.MiddleCenter;
+            playerSettingsText.text = "*";
+            playerSettingsText.color = Color.black;
+            playerSettingsText.rectTransform.sizeDelta = new Vector2(50, 50);
         }
 
         public void MakePlayerInList(Player player)
@@ -1087,7 +1173,7 @@ namespace Bag_With_Friends
 
             GameObject heightOb = new GameObject("Height");
             heightOb.transform.SetParent(playerOB.transform);
-            heightOb.transform.localPosition = new Vector3(10, 0, 0);
+            heightOb.transform.localPosition = new Vector3(100, 0, 0);
             player.heightText = heightOb.AddComponent<Text>();
             player.heightText.rectTransform.pivot = new Vector2(0, 0.5f);
             player.heightText.rectTransform.sizeDelta = new Vector2(300, 50);
@@ -1137,13 +1223,532 @@ namespace Bag_With_Friends
             playerListingLookup.Add(player.id, playerOB);
         }
 
+        public void MakePlayerSettingsMenu()
+        {
+            LoggerInstance.Msg("Making Player Settings Menu");
+
+            playerSettingsMenu = new GameObject("background");
+            playerSettingsMenu.transform.SetParent(multiplayerMenuObject.transform);
+            Image bgIm = playerSettingsMenu.AddComponent<Image>();
+            bgIm.rectTransform.sizeDelta = new Vector2(1820, 780);
+            bgIm.rectTransform.anchoredPosition = new Vector2(0, 100);
+            bgIm.color = new Color(0, 0, 0, 0.85f);
+
+            GameObject playerColorOb = new GameObject("Player Color");
+            playerColorOb.transform.SetParent(playerSettingsMenu.transform);
+            playerColorOb.transform.localPosition = new Vector3(-650, 0, 0);
+            playerColorPreview = playerColorOb.AddComponent<Image>();
+            playerColorPreview.color = playerColor;
+            playerColorPreview.rectTransform.sizeDelta = new Vector2(400, 300);
+
+            GameObject sliderSteal = GameObject.Find("Canvas").transform.Find("InGameMenu/InGameMenuObj_DisableMe/Options_pg_DisableMe/holder/mainanchor/main_options/MasterLevelsSlider").gameObject;
+            LoggerInstance.Msg(sliderSteal);
+
+            GameObject colorRObject = GameObject.Instantiate(sliderSteal);
+            colorRObject.transform.SetParent(playerColorOb.transform);
+            colorRObject.transform.localPosition = new Vector3(0, 112.5f, 0);
+            colorRObject.transform.GetChild(colorRObject.transform.childCount - 1).GetComponent<Text>().text = "R";
+            Slider colorRSlider = colorRObject.GetComponent<Slider>();
+            colorRSlider.minValue = 0f;
+            colorRSlider.maxValue = 1f;
+            colorRSlider.value = 1f;
+            colorRSlider.onValueChanged = new Slider.SliderEvent();
+            colorRSlider.onValueChanged.AddListener((float value) =>
+            {
+                playerColor.r = value;
+                playerColorPreview.color = playerColor;
+                ws.Send($"{{\"data\":\"changeColor\", \"id\":\"{playerId}\", \"color\":[\"{playerColor.r}\", \"{playerColor.g}\", \"{playerColor.b}\", \"{playerColor.a}\"]}}");
+            });
+
+            GameObject colorGObject = GameObject.Instantiate(sliderSteal);
+            colorGObject.transform.SetParent(playerColorOb.transform);
+            colorGObject.transform.localPosition = new Vector3(0, 37.5f, 0);
+            colorGObject.transform.GetChild(colorRObject.transform.childCount - 1).GetComponent<Text>().text = "G";
+            Slider colorGSlider = colorGObject.GetComponent<Slider>();
+            colorGSlider.minValue = 0f;
+            colorGSlider.maxValue = 1f;
+            colorGSlider.value = 1f;
+            colorGSlider.onValueChanged = new Slider.SliderEvent();
+            colorGSlider.onValueChanged.AddListener((float value) =>
+            {
+                playerColor.g = value;
+                playerColorPreview.color = playerColor;
+                ws.Send($"{{\"data\":\"changeColor\", \"id\":\"{playerId}\", \"color\":[\"{playerColor.r}\", \"{playerColor.g}\", \"{playerColor.b}\", \"{playerColor.a}\"]}}");
+            });
+
+            GameObject colorBObject = GameObject.Instantiate(sliderSteal);
+            colorBObject.transform.SetParent(playerColorOb.transform);
+            colorBObject.transform.localPosition = new Vector3(0, -37.5f, 0);
+            colorBObject.transform.GetChild(colorRObject.transform.childCount - 1).GetComponent<Text>().text = "B";
+            Slider colorBSlider = colorBObject.GetComponent<Slider>();
+            colorBSlider.minValue = 0f;
+            colorBSlider.maxValue = 1f;
+            colorBSlider.value = 1f;
+            colorBSlider.onValueChanged = new Slider.SliderEvent();
+            colorBSlider.onValueChanged.AddListener((float value) =>
+            {
+                playerColor.b = value;
+                playerColorPreview.color = playerColor;
+                ws.Send($"{{\"data\":\"changeColor\", \"id\":\"{playerId}\", \"color\":[\"{playerColor.r}\", \"{playerColor.g}\", \"{playerColor.b}\", \"{playerColor.a}\"]}}");
+            });
+
+            GameObject colorAObject = GameObject.Instantiate(sliderSteal);
+            colorAObject.transform.SetParent(playerColorOb.transform);
+            colorAObject.transform.localPosition = new Vector3(0, -112.5f, 0);
+            colorAObject.transform.GetChild(colorRObject.transform.childCount - 1).GetComponent<Text>().text = "A";
+            Slider colorASlider = colorAObject.GetComponent<Slider>();
+            colorASlider.minValue = 0f;
+            colorASlider.maxValue = 1f;
+            colorASlider.value = 1f;
+            colorASlider.onValueChanged = new Slider.SliderEvent();
+            colorASlider.onValueChanged.AddListener((float value) =>
+            {
+                playerColor.a = value;
+                playerColorPreview.color = playerColor;
+                ws.Send($"{{\"data\":\"changeColor\", \"id\":\"{playerId}\", \"color\":[\"{playerColor.r}\", \"{playerColor.g}\", \"{playerColor.b}\", \"{playerColor.a}\"]}}");
+            });
+
+            // CRAMPONS
+            GameObject CramponsHeaderOb = new GameObject("Crampons Header");
+            CramponsHeaderOb.transform.SetParent(playerSettingsMenu.transform);
+            CramponsHeaderOb.transform.localPosition = new Vector3(100, 225, 0);
+            Text Crampons = CramponsHeaderOb.AddComponent<Text>();
+            Crampons.font = arial;
+            Crampons.fontSize = 40;
+            Crampons.alignment = TextAnchor.MiddleCenter;
+            Crampons.text = "Crampons";
+            Crampons.color = Color.white;
+            Crampons.rectTransform.sizeDelta = new Vector2(200, 50);
+
+            GameObject noCramponsButtonOb = new GameObject("No Crampons Button");
+            noCramponsButtonOb.transform.SetParent(playerSettingsMenu.transform);
+            noCramponsButtonOb.transform.localPosition = new Vector3(100, 150, 0);
+            UnityEngine.UI.Button noCramponsButton = noCramponsButtonOb.AddComponent<UnityEngine.UI.Button>();
+            Image noCramponsImage = noCramponsButtonOb.AddComponent<Image>();
+            noCramponsImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            noCramponsImage.rectTransform.sizeDelta = new Vector2(200, 50);
+            noCramponsButton.image = noCramponsImage;
+
+            GameObject noCramponsOb = new GameObject("No Crampons");
+            noCramponsOb.transform.SetParent(noCramponsButtonOb.transform);
+            Text noCrampons = noCramponsOb.AddComponent<Text>();
+            noCrampons.font = arial;
+            noCrampons.fontSize = 40;
+            noCrampons.alignment = TextAnchor.MiddleCenter;
+            noCrampons.text = "No";
+            noCrampons.color = Color.black;
+            noCrampons.rectTransform.sizeDelta = new Vector2(200, 50);
+            noCramponsOb.transform.localPosition = new Vector3(0, 0, 0);
+
+            GameObject CramponsButton6Ob = new GameObject("6pt crampons Button");
+            CramponsButton6Ob.transform.SetParent(playerSettingsMenu.transform);
+            CramponsButton6Ob.transform.localPosition = new Vector3(100, 75, 0);
+            UnityEngine.UI.Button CramponsButton6 = CramponsButton6Ob.AddComponent<UnityEngine.UI.Button>();
+            Image CramponsImage6 = CramponsButton6Ob.AddComponent<Image>();
+            CramponsImage6.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            CramponsImage6.rectTransform.sizeDelta = new Vector2(200, 50);
+            CramponsButton6.image = CramponsImage6;
+
+            GameObject Crampons6Ob = new GameObject("6pt crampons");
+            Crampons6Ob.transform.SetParent(CramponsButton6Ob.transform);
+            Text Crampons6 = Crampons6Ob.AddComponent<Text>();
+            Crampons6.font = arial;
+            Crampons6.fontSize = 40;
+            Crampons6.alignment = TextAnchor.MiddleCenter;
+            Crampons6.text = "6pt";
+            Crampons6.color = Color.black;
+            Crampons6.rectTransform.sizeDelta = new Vector2(200, 50);
+            Crampons6Ob.transform.localPosition = new Vector3(0, 0, 0);
+
+            GameObject CramponsButton10Ob = new GameObject("10pt crampons Button");
+            CramponsButton10Ob.transform.SetParent(playerSettingsMenu.transform);
+            CramponsButton10Ob.transform.localPosition = new Vector3(100, 0, 0);
+            UnityEngine.UI.Button CramponsButton10 = CramponsButton10Ob.AddComponent<UnityEngine.UI.Button>();
+            Image CramponsImage10 = CramponsButton10Ob.AddComponent<Image>();
+            CramponsImage10.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            CramponsImage10.rectTransform.sizeDelta = new Vector2(200, 50);
+            CramponsButton10.image = CramponsImage10;
+
+            GameObject Crampons10Ob = new GameObject("10pt crampons");
+            Crampons10Ob.transform.SetParent(CramponsButton10Ob.transform);
+            Text Crampons10 = Crampons10Ob.AddComponent<Text>();
+            Crampons10.font = arial;
+            Crampons10.fontSize = 40;
+            Crampons10.alignment = TextAnchor.MiddleCenter;
+            Crampons10.text = "10pt";
+            Crampons10.color = Color.black;
+            Crampons10.rectTransform.sizeDelta = new Vector2(200, 50);
+            Crampons10Ob.transform.localPosition = new Vector3(0, 0, 0);
+
+
+            noCramponsButton.onClick.AddListener(() =>
+            {
+                GameManager.control.crampons = false;
+                cramponsB = false;
+
+                noCramponsImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+                CramponsImage6.color = new Color(0.5f, 0.5f, 0.5f, 1);
+                CramponsImage10.color = new Color(0.5f, 0.5f, 0.5f, 1);
+
+                UpdateName(cacheName);
+            });
+
+            CramponsButton6.onClick.AddListener(() =>
+            {
+                GameManager.control.crampons = true;
+                GameManager.control.cramponsUpgrade = false;
+
+                cramponsB = true;
+                cramponUpgradeB = false;
+
+                noCramponsImage.color = new Color(0.5f, 0.5f, 0.5f, 1);
+                CramponsImage6.color = new Color(0.9f, 0.9f, 0.9f, 1);
+                CramponsImage10.color = new Color(0.5f, 0.5f, 0.5f, 1);
+
+                UpdateName(cacheName);
+            });
+
+            CramponsButton10.onClick.AddListener(() =>
+            {
+                GameManager.control.crampons = true;
+                GameManager.control.cramponsUpgrade = true;
+
+                cramponsB = true;
+                cramponUpgradeB = true;
+
+                noCramponsImage.color = new Color(0.5f, 0.5f, 0.5f, 1);
+                CramponsImage6.color = new Color(0.5f, 0.5f, 0.5f, 1);
+                CramponsImage10.color = new Color(0.9f, 0.9f, 0.9f, 1);
+
+                UpdateName(cacheName);
+            });
+
+            if (!GameManager.control.crampons)
+            {
+                noCramponsImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+                CramponsImage6.color = new Color(0.5f, 0.5f, 0.5f, 1);
+                CramponsImage10.color = new Color(0.5f, 0.5f, 0.5f, 1);
+            } else if (GameManager.control.cramponsUpgrade)
+            {
+                noCramponsImage.color = new Color(0.5f, 0.5f, 0.5f, 1);
+                CramponsImage6.color = new Color(0.5f, 0.5f, 0.5f, 1);
+                CramponsImage10.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            } else
+            {
+                noCramponsImage.color = new Color(0.5f, 0.5f, 0.5f, 1);
+                CramponsImage6.color = new Color(0.9f, 0.9f, 0.9f, 1);
+                CramponsImage10.color = new Color(0.5f, 0.5f, 0.5f, 1);
+            }
+
+            // COFFEE
+            GameObject CoffeeHeaderOb = new GameObject("Coffee Header");
+            CoffeeHeaderOb.transform.SetParent(playerSettingsMenu.transform);
+            CoffeeHeaderOb.transform.localPosition = new Vector3(325, 225, 0);
+            Text Coffee = CoffeeHeaderOb.AddComponent<Text>();
+            Coffee.font = arial;
+            Coffee.fontSize = 40;
+            Coffee.alignment = TextAnchor.MiddleCenter;
+            Coffee.text = "Coffee";
+            Coffee.color = Color.white;
+            Coffee.rectTransform.sizeDelta = new Vector2(200, 50);
+
+            GameObject noCoffeeButtonOb = new GameObject("No Coffee Button");
+            noCoffeeButtonOb.transform.SetParent(playerSettingsMenu.transform);
+            noCoffeeButtonOb.transform.localPosition = new Vector3(325, 150, 0);
+            UnityEngine.UI.Button noCoffeeButton = noCoffeeButtonOb.AddComponent<UnityEngine.UI.Button>();
+            Image noCoffeeImage = noCoffeeButtonOb.AddComponent<Image>();
+            noCoffeeImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            noCoffeeImage.rectTransform.sizeDelta = new Vector2(200, 50);
+            noCoffeeButton.image = noCoffeeImage;
+
+            GameObject noCoffeeOb = new GameObject("No coffee");
+            noCoffeeOb.transform.SetParent(noCoffeeButtonOb.transform);
+            Text noCoffee = noCoffeeOb.AddComponent<Text>();
+            noCoffee.font = arial;
+            noCoffee.fontSize = 40;
+            noCoffee.alignment = TextAnchor.MiddleCenter;
+            noCoffee.text = "No";
+            noCoffee.color = Color.black;
+            noCoffee.rectTransform.sizeDelta = new Vector2(200, 50);
+            noCoffeeOb.transform.localPosition = new Vector3(0, 0, 0);
+
+            GameObject CoffeeOb = new GameObject("Coffee Button");
+            CoffeeOb.transform.SetParent(playerSettingsMenu.transform);
+            CoffeeOb.transform.localPosition = new Vector3(325, 75, 0);
+            UnityEngine.UI.Button CoffeeButton = CoffeeOb.AddComponent<UnityEngine.UI.Button>();
+            Image CoffeeImage = CoffeeOb.AddComponent<Image>();
+            CoffeeImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            CoffeeImage.rectTransform.sizeDelta = new Vector2(200, 50);
+            CoffeeButton.image = CoffeeImage;
+
+            GameObject CoffeeTextOb = new GameObject("Coffee");
+            CoffeeTextOb.transform.SetParent(CoffeeOb.transform);
+            Text CoffeeText = CoffeeTextOb.AddComponent<Text>();
+            CoffeeText.font = arial;
+            CoffeeText.fontSize = 40;
+            CoffeeText.alignment = TextAnchor.MiddleCenter;
+            CoffeeText.text = "Yes";
+            CoffeeText.color = Color.black;
+            CoffeeText.rectTransform.sizeDelta = new Vector2(200, 50);
+            CoffeeTextOb.transform.localPosition = new Vector3(0, 0, 0);
+
+
+            noCoffeeButton.onClick.AddListener(() =>
+            {
+                GameManager.control.coffee = false;
+
+                coffeeB = false;
+
+                noCoffeeImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+                CoffeeImage.color = new Color(0.5f, 0.5f, 0.5f, 1);
+
+                UpdateName(cacheName);
+            });
+
+            CoffeeButton.onClick.AddListener(() =>
+            {
+                GameManager.control.coffee = true;
+
+                coffeeB = true;
+
+                noCoffeeImage.color = new Color(0.5f, 0.5f, 0.5f, 1);
+                CoffeeImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+
+                UpdateName(cacheName);
+            });
+
+            if (GameManager.control.coffee)
+            {
+                noCoffeeImage.color = new Color(0.5f, 0.5f, 0.5f, 1);
+                CoffeeImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            } else
+            {
+                noCoffeeImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+                CoffeeImage.color = new Color(0.5f, 0.5f, 0.5f, 1);
+            }
+
+            // PIPE
+            GameObject PipeHeaderOb = new GameObject("Pipe Header");
+            PipeHeaderOb.transform.SetParent(playerSettingsMenu.transform);
+            PipeHeaderOb.transform.localPosition = new Vector3(550, 225, 0);
+            Text Pipe = PipeHeaderOb.AddComponent<Text>();
+            Pipe.font = arial;
+            Pipe.fontSize = 40;
+            Pipe.alignment = TextAnchor.MiddleCenter;
+            Pipe.text = "Pipe";
+            Pipe.color = Color.white;
+            Pipe.rectTransform.sizeDelta = new Vector2(200, 50);
+
+            GameObject noPipeButtonOb = new GameObject("No Pipe Button");
+            noPipeButtonOb.transform.SetParent(playerSettingsMenu.transform);
+            noPipeButtonOb.transform.localPosition = new Vector3(550, 150, 0);
+            UnityEngine.UI.Button noPipeButton = noPipeButtonOb.AddComponent<UnityEngine.UI.Button>();
+            Image noPipeImage = noPipeButtonOb.AddComponent<Image>();
+            noPipeImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            noPipeImage.rectTransform.sizeDelta = new Vector2(200, 50);
+            noPipeButton.image = noPipeImage;
+
+            GameObject noPipeOb = new GameObject("No Pipe");
+            noPipeOb.transform.SetParent(noPipeButtonOb.transform);
+            Text noPipe = noPipeOb.AddComponent<Text>();
+            noPipe.font = arial;
+            noPipe.fontSize = 40;
+            noPipe.alignment = TextAnchor.MiddleCenter;
+            noPipe.text = "No";
+            noPipe.color = Color.black;
+            noPipe.rectTransform.sizeDelta = new Vector2(200, 50);
+            noPipeOb.transform.localPosition = new Vector3(0, 0, 0);
+
+            GameObject PipeOb = new GameObject("Pipe Button");
+            PipeOb.transform.SetParent(playerSettingsMenu.transform);
+            PipeOb.transform.localPosition = new Vector3(550, 75, 0);
+            UnityEngine.UI.Button PipeButton = PipeOb.AddComponent<UnityEngine.UI.Button>();
+            Image PipeImage = PipeOb.AddComponent<Image>();
+            PipeImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            PipeImage.rectTransform.sizeDelta = new Vector2(200, 50);
+            PipeButton.image = PipeImage;
+
+            GameObject PipeTextOb = new GameObject("Pipe");
+            PipeTextOb.transform.SetParent(PipeOb.transform);
+            Text PipeText = PipeTextOb.AddComponent<Text>();
+            PipeText.font = arial;
+            PipeText.fontSize = 40;
+            PipeText.alignment = TextAnchor.MiddleCenter;
+            PipeText.text = "Yes";
+            PipeText.color = Color.black;
+            PipeText.rectTransform.sizeDelta = new Vector2(200, 50);
+            PipeTextOb.transform.localPosition = new Vector3(0, 0, 0);
+
+
+            noPipeButton.onClick.AddListener(() =>
+            {
+                GameManager.control.isUsingPipe = false;
+                GameManager.control.smokingpipe = false;
+
+                pipeB = false;
+
+                noPipeImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+                PipeImage.color = new Color(0.5f, 0.5f, 0.5f, 1);
+
+                UpdateName(cacheName);
+            });
+
+            PipeButton.onClick.AddListener(() =>
+            {
+                GameManager.control.isUsingPipe = true;
+                GameManager.control.smokingpipe = true;
+
+                pipeB = true;
+
+                noPipeImage.color = new Color(0.5f, 0.5f, 0.5f, 1);
+                PipeImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+
+                UpdateName(cacheName);
+            });
+
+            if (GameManager.control.isUsingPipe)
+            {
+                noPipeImage.color = new Color(0.5f, 0.5f, 0.5f, 1);
+                PipeImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            }
+            else
+            {
+                noPipeImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+                PipeImage.color = new Color(0.5f, 0.5f, 0.5f, 1);
+            }
+
+
+            // ICE AXES
+            GameObject IceAxesHeaderOb = new GameObject("IceAxes Header");
+            IceAxesHeaderOb.transform.SetParent(playerSettingsMenu.transform);
+            IceAxesHeaderOb.transform.localPosition = new Vector3(775, 225, 0);
+            Text IceAxes = IceAxesHeaderOb.AddComponent<Text>();
+            IceAxes.font = arial;
+            IceAxes.fontSize = 40;
+            IceAxes.alignment = TextAnchor.MiddleCenter;
+            IceAxes.text = "Ice Axes";
+            IceAxes.color = Color.white;
+            IceAxes.rectTransform.sizeDelta = new Vector2(200, 50);
+
+            GameObject noIceAxesButtonOb = new GameObject("No IceAxes Button");
+            noIceAxesButtonOb.transform.SetParent(playerSettingsMenu.transform);
+            noIceAxesButtonOb.transform.localPosition = new Vector3(775, 150, 0);
+            UnityEngine.UI.Button noIceAxesButton = noIceAxesButtonOb.AddComponent<UnityEngine.UI.Button>();
+            Image noIceAxesImage = noIceAxesButtonOb.AddComponent<Image>();
+            noIceAxesImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            noIceAxesImage.rectTransform.sizeDelta = new Vector2(200, 50);
+            noIceAxesButton.image = noIceAxesImage;
+
+            GameObject noIceAxesOb = new GameObject("No IceAxes");
+            noIceAxesOb.transform.SetParent(noIceAxesButtonOb.transform);
+            Text noIceAxes = noIceAxesOb.AddComponent<Text>();
+            noIceAxes.font = arial;
+            noIceAxes.fontSize = 40;
+            noIceAxes.alignment = TextAnchor.MiddleCenter;
+            noIceAxes.text = "No";
+            noIceAxes.color = Color.black;
+            noIceAxes.rectTransform.sizeDelta = new Vector2(200, 50);
+            noIceAxesOb.transform.localPosition = new Vector3(0, 0, 0);
+
+            GameObject IceAxesOb = new GameObject("IceAxes Button");
+            IceAxesOb.transform.SetParent(playerSettingsMenu.transform);
+            IceAxesOb.transform.localPosition = new Vector3(775, 75, 0);
+            UnityEngine.UI.Button IceAxesButton = IceAxesOb.AddComponent<UnityEngine.UI.Button>();
+            Image IceAxesImage = IceAxesOb.AddComponent<Image>();
+            IceAxesImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            IceAxesImage.rectTransform.sizeDelta = new Vector2(200, 50);
+            IceAxesButton.image = IceAxesImage;
+
+            GameObject IceAxesTextOb = new GameObject("IceAxes");
+            IceAxesTextOb.transform.SetParent(IceAxesOb.transform);
+            Text IceAxesText = IceAxesTextOb.AddComponent<Text>();
+            IceAxesText.font = arial;
+            IceAxesText.fontSize = 40;
+            IceAxesText.alignment = TextAnchor.MiddleCenter;
+            IceAxesText.text = "Yes";
+            IceAxesText.color = Color.black;
+            IceAxesText.rectTransform.sizeDelta = new Vector2(200, 50);
+            IceAxesTextOb.transform.localPosition = new Vector3(0, 0, 0);
+
+
+            noIceAxesButton.onClick.AddListener(() =>
+            {
+                GameManager.control.iceAxes = false;
+
+                axesB = false;
+
+                noIceAxesImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+                IceAxesImage.color = new Color(0.5f, 0.5f, 0.5f, 1);
+
+                UpdateName(cacheName);
+            });
+
+            IceAxesButton.onClick.AddListener(() =>
+            {
+                GameManager.control.iceAxes = true;
+
+                axesB = true;
+
+                noIceAxesImage.color = new Color(0.5f, 0.5f, 0.5f, 1);
+                IceAxesImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+
+                UpdateName(cacheName);
+            });
+
+            if (GameManager.control.iceAxes)
+            {
+                noIceAxesImage.color = new Color(0.5f, 0.5f, 0.5f, 1);
+                IceAxesImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            }
+            else
+            {
+                noIceAxesImage.color = new Color(0.9f, 0.9f, 0.9f, 1);
+                IceAxesImage.color = new Color(0.5f, 0.5f, 0.5f, 1);
+            }
+
+            if (!compMode)
+            {
+                noCramponsButton.interactable = false;
+                CramponsButton6.interactable = false;
+                CramponsButton10.interactable = false;
+
+                CoffeeButton.interactable = false;
+                noCramponsButton.interactable = false;
+
+                PipeButton.interactable = false;
+                noPipeButton.interactable = false;
+
+                IceAxesButton.interactable = false;
+                noIceAxesButton.interactable = false;
+
+                GameObject CoverOb = new GameObject("Cover");
+                CoverOb.transform.SetParent(playerSettingsMenu.transform);
+                CoverOb.transform.localPosition = new Vector3(437.5f, 75, 0);
+                Image CoverImage = CoverOb.AddComponent<Image>();
+                CoverImage.color = new Color(0, 0, 0, 0.85f);
+                CoverImage.rectTransform.sizeDelta = new Vector2(900, 500);
+
+                GameObject CoverTextOb = new GameObject("Cover Text");
+                CoverTextOb.transform.SetParent(CoverOb.transform);
+                Text CoverText = CoverTextOb.AddComponent<Text>();
+                CoverText.font = arial;
+                CoverText.fontSize = 64;
+                CoverText.alignment = TextAnchor.MiddleCenter;
+                CoverText.text = "Only available in Comp mode!";
+                CoverText.color = Color.red;
+                CoverText.rectTransform.sizeDelta = new Vector2(1000, 600);
+                CoverTextOb.transform.localPosition = new Vector3(0, 0, 0);
+            }
+        }
+
+
         public override async void OnFixedUpdate()
         {
             //LoggerInstance.Msg(amHost);
 
             if (makingShadowPrefab) return;
 
-            if ((SteamManager.Initialized || GalaxyManager.Instance.GalaxyFullyInitialized) && ws == null)
+            if (SteamManager.Initialized && ws == null)
             {
                 Connect();
             }
@@ -1157,11 +1762,20 @@ namespace Bag_With_Friends
 
             if (!wasAlive && lastPing + (inRoom ? 5000 : 15000) < DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() && !freshBoot)
             {
-                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() < reconnectDelay + 1000)
+                if (reconnectDelay + 1000 < DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
                 {
                     reconnectDelay = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                     ws.ConnectAsync();
                     LoggerInstance.Msg("reconnecting");
+                }
+            }
+
+            if (!wasAlive && lastPing + 5000 < DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() && freshBoot)
+            {
+                if (reconnectDelay + 1000 < DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+                {
+                    reconnectDelay = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    ws.ConnectAsync();
                 }
             }
 
@@ -1211,34 +1825,38 @@ namespace Bag_With_Friends
 
             GetDependencies();
 
+            if (pipeObject != null)
+            {
+                pipeObject.SetActive(GameManager.control.isUsingPipe && GameManager.control.smokingpipe);
+            }
+
             if (inRoom && mePlayer != null && shadow != null && meClimbing != null && barometer != null)
             {
                 //meFoots.legHolder.localPosition = new Vector3(0, meFoots.legHolderDefaultPos.localPosition.y, 0);
 
 
                 float height = barometer.currentMetresUp;
-                mePlayerPlayer.heightText.text = height.ToString("#.##") + "m";
+                mePlayerPlayer.heightText.text = height.ToString("0.0#") + "m";
 
-                string updateString = $"{{\"data\":\"updatePosition\", \"id\":\"{playerId}\", " +
-                    $"\"height\":\"{height}\", " +
-                    $"\"position\":[\"{shadow.transform.position.x}\",\"{shadow.transform.position.y}\",\"{shadow.transform.position.z}\"], " +
-                    $"\"handL\":[\"{shadow.handIK_L.solver.arm.target.position.x}\",\"{shadow.handIK_L.solver.arm.target.position.y}\",\"{shadow.handIK_L.solver.arm.target.position.z}\"], " +
-                    $"\"handR\":[\"{shadow.handIK_R.solver.arm.target.position.x}\",\"{shadow.handIK_R.solver.arm.target.position.y}\",\"{shadow.handIK_R.solver.arm.target.position.z}\"], " +
-                    $"\"armStrechL\":\"{shadow.handIK_L.solver.arm.armLengthMlp}\", " +
-                    $"\"armStrechR\":\"{shadow.handIK_R.solver.arm.armLengthMlp}\", " +
-                    $"\"footL\":[\"{shadow.footIK_L.solver.target.transform.position.x}\",\"{shadow.footIK_L.solver.target.position.y}\",\"{shadow.footIK_L.solver.target.position.z}\"], " +
-                    $"\"footR\":[\"{shadow.footIK_R.solver.target.position.x}\",\"{shadow.footIK_R.solver.target.position.y}\",\"{shadow.footIK_R.solver.target.position.z}\"], " +
-                    $"\"footLBend\":[\"{shadow.realleftKnee.transform.position.x}\",\"{shadow.realleftKnee.transform.position.y}\",\"{shadow.realleftKnee.transform.position.z}\"], " +
-                    $"\"footRBend\":[\"{shadow.realrightKnee.transform.position.x}\",\"{shadow.realrightKnee.transform.position.y}\",\"{shadow.realrightKnee.transform.position.z}\"], " +
-                    $"\"rotation\":[\"{shadow.transform.rotation.x}\",\"{shadow.transform.rotation.y}\",\"{shadow.transform.rotation.z}\",\"{shadow.transform.rotation.w}\"], " +
-                    $"\"handLRotation\":[\"{shadow.handIK_L.solver.arm.target.rotation.x}\",\"{shadow.handIK_L.solver.arm.target.rotation.y}\",\"{shadow.handIK_L.solver.arm.target.rotation.z}\",\"{shadow.handIK_L.solver.arm.target.rotation.w}\"], " +
-                    $"\"handRRotation\":[\"{shadow.handIK_R.solver.arm.target.rotation.x}\",\"{shadow.handIK_R.solver.arm.target.rotation.y}\",\"{shadow.handIK_R.solver.arm.target.rotation.z}\",\"{shadow.handIK_R.solver.arm.target.rotation.w}\"], " +
-                    $"\"footLRotation\":[\"{shadow.footIK_L.solver.target.rotation.x}\",\"{shadow.footIK_L.solver.target.rotation.y}\",\"{shadow.footIK_L.solver.target.rotation.z}\",\"{shadow.footIK_L.solver.target.rotation.w}\"], " +
-                    $"\"footRRotation\":[\"{shadow.footIK_R.solver.target.rotation.x}\",\"{shadow.footIK_R.solver.target.rotation.y}\",\"{shadow.footIK_R.solver.target.rotation.z}\",\"{shadow.footIK_R.solver.target.rotation.w}\"]" +
-                    $"}}";
+                string updateString = $"{{\"data\":\"updatePosition\", \"id\":\"{playerId}\", \"update\":\"" +
+                    $"{{\\\"data\\\": \\\"updatePlayerPosition\\\", \\\"id\\\":{playerId}, " +
+                    $"\\\"height\\\":\\\"{height.ToString("0.0#")}\\\", " +
+                    $"\\\"position\\\":[\\\"{shadow.transform.position.x.ToString("0.0#")}\\\",\\\"{shadow.transform.position.y.ToString("0.0#")}\\\",\\\"{shadow.transform.position.z.ToString("0.0#")}\\\"], " +
+                    $"\\\"handL\\\":[\\\"{shadow.handIK_L.solver.arm.target.position.x.ToString("0.0#")}\\\",\\\"{shadow.handIK_L.solver.arm.target.position.y.ToString("0.0#")}\\\",\\\"{shadow.handIK_L.solver.arm.target.position.z.ToString("0.0#")}\\\"], " +
+                    $"\\\"handR\\\":[\\\"{shadow.handIK_R.solver.arm.target.position.x.ToString("0.0#")}\\\",\\\"{shadow.handIK_R.solver.arm.target.position.y.ToString("0.0#")}\\\",\\\"{shadow.handIK_R.solver.arm.target.position.z.ToString("0.0#")}\\\"], " +
+                    $"\\\"armStrechL\\\":\\\"{shadow.handIK_L.solver.arm.armLengthMlp}\\\", " +
+                    $"\\\"armStrechR\\\":\\\"{shadow.handIK_R.solver.arm.armLengthMlp}\\\", " +
+                    $"\\\"footL\\\":[\\\"{shadow.footIK_L.solver.target.transform.position.x.ToString("0.0#")}\\\",\\\"{shadow.footIK_L.solver.target.position.y.ToString("0.0#")}\\\",\\\"{shadow.footIK_L.solver.target.position.z.ToString("0.0#")}\\\"], " +
+                    $"\\\"footR\\\":[\\\"{shadow.footIK_R.solver.target.position.x.ToString("0.0#")}\\\",\\\"{shadow.footIK_R.solver.target.position.y.ToString("0.0#")}\\\",\\\"{shadow.footIK_R.solver.target.position.z.ToString("0.0#")}\\\"], " +
+                    $"\\\"footLBend\\\":[\\\"{shadow.realleftKnee.transform.position.x.ToString("0.0#")}\\\",\\\"{shadow.realleftKnee.transform.position.y.ToString("0.0#")}\\\",\\\"{shadow.realleftKnee.transform.position.z.ToString("0.0#")}\\\"], " +
+                    $"\\\"footRBend\\\":[\\\"{shadow.realrightKnee.transform.position.x.ToString("0.0#")}\\\",\\\"{shadow.realrightKnee.transform.position.y.ToString("0.0#")}\\\",\\\"{shadow.realrightKnee.transform.position.z.ToString("0.0#")}\\\"], " +
+                    $"\\\"rotation\\\":[\\\"{shadow.transform.rotation.x.ToString("0.0#")}\\\",\\\"{shadow.transform.rotation.y.ToString("0.0#")}\\\",\\\"{shadow.transform.rotation.z.ToString("0.0#")}\\\",\\\"{shadow.transform.rotation.w.ToString("0.0#")}\\\"], " +
+                    $"\\\"handLRotation\\\":[\\\"{shadow.handIK_L.solver.arm.target.rotation.x.ToString("0.0#")}\\\",\\\"{shadow.handIK_L.solver.arm.target.rotation.y.ToString("0.0#")}\\\",\\\"{shadow.handIK_L.solver.arm.target.rotation.z.ToString("0.0#")}\\\",\\\"{shadow.handIK_L.solver.arm.target.rotation.w.ToString("0.0#")}\\\"], " +
+                    $"\\\"handRRotation\\\":[\\\"{shadow.handIK_R.solver.arm.target.rotation.x.ToString("0.0#")}\\\",\\\"{shadow.handIK_R.solver.arm.target.rotation.y.ToString("0.0#")}\\\",\\\"{shadow.handIK_R.solver.arm.target.rotation.z.ToString("0.0#")}\\\",\\\"{shadow.handIK_R.solver.arm.target.rotation.w.ToString("0.0#")}\\\"], " +
+                    $"\\\"footLRotation\\\":[\\\"{shadow.footIK_L.solver.target.rotation.x.ToString("0.0#")}\\\",\\\"{shadow.footIK_L.solver.target.rotation.y.ToString("0.0#")}\\\",\\\"{shadow.footIK_L.solver.target.rotation.z.ToString("0.0#")}\\\",\\\"{shadow.footIK_L.solver.target.rotation.w.ToString("0.0#")}\\\"], " +
+                    $"\\\"footRRotation\\\":[\\\"{shadow.footIK_R.solver.target.rotation.x.ToString("0.0#")}\\\",\\\"{shadow.footIK_R.solver.target.rotation.y.ToString("0.0#")}\\\",\\\"{shadow.footIK_R.solver.target.rotation.z.ToString("0.0#")}\\\",\\\"{shadow.footIK_R.solver.target.rotation.w.ToString("0.0#")}\\\"]" +
+                    $"}}\"}}";
                 ws.SendAsync(updateString, null);
-
-                //meFoots.legHolder.localPosition = new Vector3(0, meFoots.legHolderDefaultPos.localPosition.y, meFoots.legHolderDefaultPos.localPosition.z);
             }
 
             foreach (Transform tran in sceneSplitters.Values)
@@ -1249,6 +1867,7 @@ namespace Bag_With_Friends
             Transform meSplitter = sceneSplitters[mePlayerPlayer.scene];
             meSplitter.gameObject.SetActive(true);
             playerListingLookup[mePlayerPlayer.id].transform.SetSiblingIndex(meSplitter.GetSiblingIndex() + 1);
+            mePlayerPlayer.nameText.text = mePlayerPlayer.name;
 
             foreach (Player player in playersInRoom)
             {
@@ -1259,6 +1878,7 @@ namespace Bag_With_Friends
                 //LoggerInstance.Msg(player.name + "'s ping: " + player.ping + "ms");
                 player.pingText.text = player.ping + "ms";
                 player.heightText.text = player.height.ToString("#.##") + "m";
+                player.nameText.text = player.name;
                 
                 if (player.height == 0)
                 {
@@ -1295,6 +1915,11 @@ namespace Bag_With_Friends
                 player.footR.transform.rotation = player.footRRotation;
 
                 player.nameBillboard.rotation = Camera.main.transform.rotation;
+
+                foreach (TextMesh mesh in GetAllTextMeshesInChildren(player.nameBillboard.gameObject))
+                {
+                    mesh.text = player.name;
+                }
             }
 
             if (SceneManager.GetActiveScene().name == "TitleScreen")
@@ -1317,7 +1942,6 @@ namespace Bag_With_Friends
             if (Input.GetKeyDown(KeyCode.Tab))
             {
                 multiplayerMenuObject.SetActive(true);
-
                 if (inRoom)
                 {
                     roomMenu.SetActive(!roomMenu.activeSelf);
@@ -1326,13 +1950,15 @@ namespace Bag_With_Friends
                     multiplayerMenu.SetActive(!multiplayerMenu.activeSelf);
                 }
 
-                if (multiplayerMenu.activeSelf || roomMenu.activeSelf)
+                if ((multiplayerMenu.activeSelf || roomMenu.activeSelf) && !playerSettingsMenu.activeSelf)
                 {
                     mouseOnOpen = Cursor.lockState;
                 } else if (InGameMenu.isCurrentlyNavigationMenu || SceneManager.GetActiveScene().name == "TitleScreen")
                 {
                     mouseOnOpen = CursorLockMode.None;
                 }
+
+                playerSettingsMenu.SetActive(false);
 
                 Cursor.lockState = (multiplayerMenu.activeSelf || roomMenu.activeSelf) ? CursorLockMode.None : mouseOnOpen;
                 Cursor.visible = (multiplayerMenu.activeSelf || roomMenu.activeSelf) || mouseOnOpen == CursorLockMode.None ? true : false;
@@ -1383,15 +2009,33 @@ namespace Bag_With_Friends
                 }
 
             }
+
+            if (compMode && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > cheatEngineCheck)
+            {
+                cheatEngineCheck = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 1000;
+
+                IDictionary<IntPtr, string> windows = OpenWindowGetter.GetOpenWindows();
+                for (int i = 0; i < windows.Count; i++)
+                {
+                    if (windows.Values.ElementAt(i).Contains("Cheat Engine"))
+                    {
+                        i = windows.Count + 1;
+                        ws.Send($"{{\"data\":\"sendToEveryone\", \"id\":\"{playerId}\", \"type\":false, \"message\":\"HAS CHEAT ENGINE OPEN!\"}}");
+                    }
+                }
+            }
         }
 
         public override async void OnSceneWasLoaded(int buildIndex, string sceneName)
         {
             if (multiplayerMenuObject == null) {
+                arial = new GameObject().AddComponent<TextMesh>().font;
                 MakeMenu();
                 MakeRoomMenu();
+                MakePlayerSettingsMenu();
                 multiplayerMenu.SetActive(false);
                 roomMenu.SetActive(false);
+                playerSettingsMenu.SetActive(false);
 
                 MakeInfoText("Current BWF Version: " + Info.SemanticVersion, Color.white);
                 MakeInfoText("Press ` to lock/unlock Mouse", Color.white, 48);
@@ -1413,6 +2057,16 @@ namespace Bag_With_Friends
             }
 
             myLastScene = sceneName;
+
+            if (compMode)
+            {
+                GameManager.control.crampons = cramponsB;
+                GameManager.control.cramponsUpgrade = cramponUpgradeB;
+                GameManager.control.coffee = coffeeB;
+                GameManager.control.isUsingPipe = pipeB;
+                GameManager.control.smokingpipe = pipeB;
+                GameManager.control.iceAxes = axesB;
+            }
 
             if (makingShadowPrefab) return;
             if (!connected) return;
@@ -1441,13 +2095,41 @@ namespace Bag_With_Friends
         }
 
         [HarmonyPatch(typeof(StamperPeakSummit), "StampJournal", new Type[] {})]
-        private static class Patch
+        private static class StampPatch
         {
             private static void Prefix()
             {
                 ws.Send($"{{\"data\":\"summit\", \"id\":\"{playerId}\", \"scene\":\"{mePlayerPlayer.scene}\"}}");
             }
         }
+
+        [HarmonyPatch(typeof(DiscordActivityUpdater), "UpdateStatus", new Type[] { })]
+        private static class DiscordPatch
+        {
+            private static void Postfix(DiscordActivityUpdater __instance)
+            {
+                Reflec reflec = new Reflec(typeof(DiscordActivityUpdater), __instance);
+                __instance.discord.details = "BWF on " + ((Text)reflec.GetField("peakName")).text;
+            }
+        }
+
+        static bool tempPipe = false;
+        [HarmonyPatch(typeof(Pipe), "CheckLoad", new Type[] { })]
+        private static class PipePatch
+        {
+            private static void Prefix(Pipe __instance)
+            {
+                tempPipe = GameManager.control.isUsingPipe;
+                GameManager.control.isUsingPipe = true;
+            }
+
+            private static void Postfix(Pipe __instance)
+            {
+                GameManager.control.isUsingPipe = tempPipe;
+                pipeObject = __instance.gameObject;
+            }
+        }
+
         public void giveInfo()
         {
             wasAlive = true;
@@ -1460,10 +2142,6 @@ namespace Bag_With_Friends
                 {
                     playerId = SteamUser.GetSteamID().m_SteamID;
                     playerName = SteamFriends.GetPersonaName();
-                } else if (GalaxyManager.Instance.GalaxyFullyInitialized)
-                {
-                    playerId = GalaxyManager.Instance.MyGalaxyID.ToUint64();
-                    playerName = GalaxyManager.Instance.name;
                 }
             } else if (!wasConnected)
             {
@@ -1476,10 +2154,13 @@ namespace Bag_With_Friends
                 mePlayerPlayer = new Player(playerName, playerId, SceneManager.GetActiveScene().name, amHost, this);
             }
 
+            cacheName = playerName;
+
             lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             ws.Send($"{{\"data\":\"identify\", \"id\":\"{playerId}\", \"name\":\"{playerName}\", \"scene\":\"{SceneManager.GetActiveScene().name}\", \"ping\":{lastPing}, \"major\":{Info.SemanticVersion.Major}, \"minor\":{Info.SemanticVersion.Minor}, \"patch\":{Info.SemanticVersion.Patch}, \"wasConnected\":{wasConnected.ToString().ToLower()}}}");
             ws.Send($"{{\"data\":\"getRooms\"}}");
             ws.Send($"{{\"data\":\"changeColor\", \"id\":\"{playerId}\", \"color\":[\"{myColor.r}\", \"{myColor.g}\", \"{myColor.b}\", \"{myColor.a}\"]}}");
+            UpdateName(playerName);
             wasConnected = true;
         }
 
@@ -1534,6 +2215,41 @@ namespace Bag_With_Friends
                     barometer = barometers[0];
                 }
             }
+
+            if (pipeObject == null)
+            {
+                Pipe[] pipes = Resources.FindObjectsOfTypeAll<Pipe>();
+                if (pipes.Length != 0)
+                {
+                    pipeObject = pipes[0].gameObject;
+                }
+            }
+        }
+
+        void UpdateName(string name)
+        {
+            GameManager manager = GameManager.control;
+
+            string newName = "";
+
+            if (compMode)
+            {
+                newName += "[";
+                newName += !manager.crampons ? 0 : (manager.cramponsUpgrade ? 10 : 6);
+                newName += "|";
+                newName += manager.coffee ? "Y" : "N";
+                newName += "|";
+                newName += manager.isUsingPipe ? "Y" : "N";
+                newName += "|";
+                newName += manager.iceAxes ? "Y" : "N";
+                newName += "] ";
+            }
+
+            newName += name;
+            playerName = newName;
+            mePlayerPlayer.name = playerName;
+
+            ws.Send($"{{\"data\":\"updateName\", \"id\":\"{playerId}\", \"newName\":\"{playerName}\"}}");
         }
 
         public static void MakeInfoText(string text, Color color, int fontSize = 18)
@@ -1572,6 +2288,7 @@ namespace Bag_With_Friends
                 GameObject infoTextOb = new GameObject("update");
                 infoTextOb.transform.SetParent(updateContainer.transform);
                 Text infoText = infoTextOb.AddComponent<Text>();
+                infoText.raycastTarget = false;
                 infoText.text = line;
                 infoText.color = color;
                 infoText.fontSize = fontSize;
@@ -1613,6 +2330,8 @@ namespace Bag_With_Friends
 
             return new string[] { assemblyHashString, assembly2HashString };
         }
+
+
 
         long LongRandom(long min, long max)
         {
@@ -1656,6 +2375,23 @@ namespace Bag_With_Friends
             return components.ToArray();
         }
 
+        TextMesh[] GetAllTextMeshesInChildren(GameObject gameOb)
+        {
+            List<TextMesh> components = new List<TextMesh>(0);
+
+            if (gameOb.GetComponent<TextMesh>() != null)
+            {
+                components.Add(gameOb.GetComponent<TextMesh>());
+            }
+
+            for (int i = 0; i < gameOb.transform.childCount; i++)
+            {
+                components.AddRange(GetAllTextMeshesInChildren(gameOb.transform.GetChild(i).gameObject));
+            }
+
+            return components.ToArray();
+        }
+
         public static SkinnedMeshRenderer[] GetAllSkinnedMeshRenderersInChildren(GameObject gameOb)
         {
             List<SkinnedMeshRenderer> components = new List<SkinnedMeshRenderer>(0);
@@ -1671,6 +2407,17 @@ namespace Bag_With_Friends
             }
 
             return components.ToArray();
+        }
+
+        public static string Base64Decode(string base64EncodedData)
+        {
+            var base64EncodedBytes = System.Convert.FromBase64String(base64EncodedData);
+            return System.Text.Encoding.UTF8.GetString(base64EncodedBytes);
+        }
+        public static string Base64Encode(string plainText)
+        {
+            var plainTextBytes = System.Text.Encoding.UTF8.GetBytes(plainText);
+            return System.Convert.ToBase64String(plainTextBytes);
         }
     }
 }

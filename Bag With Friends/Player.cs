@@ -129,7 +129,7 @@ namespace Bag_With_Friends
                 //skin.material.color = bodyColor;
                 //skin.material.shaderKeywords = new string[0] { };
 
-                skin.material = new Material(Shader.Find("Legacy Shaders/Transparent/VertexLit"));
+                skin.material = new Material(Shader.Find("Legacy Shaders/Diffuse"));
                 skin.material.color = bodyColor;
 
                 bodyMaterials.Add(skin);
