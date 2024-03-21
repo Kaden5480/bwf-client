@@ -34,6 +34,7 @@ namespace Bag_With_Friends
         string server = "bwf.givo.xyz";
         bool moreLogs = false;
         bool compMode = false;
+        bool casterMode = false;
 
         System.Random rand = new System.Random();
 
@@ -53,6 +54,7 @@ namespace Bag_With_Friends
         CursorLockMode mouseOnOpen = CursorLockMode.None;
 
         public static Font arial;
+        bool frozen = false;
 
         GameObject multiplayerMenuObject;
         Canvas multiplayerMenuCanvas;
@@ -103,6 +105,7 @@ namespace Bag_With_Friends
         Dictionary<ulong, GameObject> playerListingLookup = new Dictionary<ulong, GameObject>(0);
 
         Color playerColor = new Color(1, 1, 1, 1);
+        Color playerColorLast = new Color(1, 1, 1, 1);
         Image playerColorPreview;
 
         Shader transparentDiffuse;
@@ -159,7 +162,7 @@ namespace Bag_With_Friends
                 {
                     case "identify":
                         giveInfo();
-                        
+
                         if (wasConnected && inRoom)
                         {
                             recoverTimeout = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 60000;
@@ -203,6 +206,18 @@ namespace Bag_With_Friends
                         playerLookup.Clear();
                         shadowPrefabRequests.Clear();
                         playerListingLookup.Clear();
+
+                        frozen = false;
+                        PeakSummited[] summiteds = Resources.FindObjectsOfTypeAll<PeakSummited>();
+                        if (summiteds.Length != 0)
+                        {
+                            summiteds[0].DisablePlayerMovement(frozen);
+                        } else
+                        {
+                            GameObject temp = new GameObject();
+                            temp.AddComponent<PeakSummited>().DisablePlayerMovement(frozen);
+                            GameObject.Destroy(temp);
+                        }
                         break;
 
                     case "pong":
@@ -304,6 +319,7 @@ namespace Bag_With_Friends
                         foreach (GameObject ob in playerListingLookup.Values)
                         {
                             ob.transform.GetChild(3).gameObject.SetActive(amHost);
+                            ob.transform.GetChild(4).gameObject.SetActive(amHost);
                         }
 
                         if (updateRoomButton != null)
@@ -348,6 +364,24 @@ namespace Bag_With_Friends
                     case "updatePlayerScene":
                         Player playerToUpdate = playerLookup[res.GetProperty("id").GetUInt64()];
                         playerToUpdate.ChangeScene(res.GetProperty("scene").GetString());
+                        break;
+
+                    case "freeze":
+                        frozen = (res.GetProperty("freeze").GetUInt64() == 1);
+                        if (compMode)
+                        {
+                            PeakSummited[] summiteds2 = Resources.FindObjectsOfTypeAll<PeakSummited>();
+
+                            if (summiteds2.Length != 0)
+                            {
+                                summiteds2[0].DisablePlayerMovement(frozen);
+                            } else
+                            {
+                                GameObject temp2 = new GameObject();
+                                temp2.AddComponent<PeakSummited>().DisablePlayerMovement(frozen);
+                                GameObject.Destroy(temp2);
+                            }
+                        }
                         break;
 
                     case "playerNewName":
@@ -430,6 +464,9 @@ namespace Bag_With_Friends
                 } else if (args[i] == "-comp-mode")
                 {
                     compMode = true;
+                } else if (args[i] == "-caster-mode")
+                {
+                    casterMode = true;
                 }
             }
         }
@@ -704,7 +741,7 @@ namespace Bag_With_Friends
             makeRoomText.text = "Make Room";
             makeRoomText.color = Color.black;
             makeRoomText.rectTransform.sizeDelta = new Vector2(200, 50);
-             
+
             GameObject KofiOb = new GameObject("Kofi Button");
             KofiOb.transform.SetParent(multiplayerMenu.transform);
             KofiOb.transform.localPosition = Vector2.zero;
@@ -729,7 +766,7 @@ namespace Bag_With_Friends
             UnityEngine.UI.Button playerSettingsButton = playerSettingsButtonOb.AddComponent<UnityEngine.UI.Button>();
             Image playerSettings = playerSettingsButtonOb.AddComponent<Image>();
             playerSettings.color = new Color(0.9f, 0.9f, 0.9f, 1);
-            playerSettings.rectTransform.sizeDelta = new Vector2(50, 50);
+            playerSettings.rectTransform.sizeDelta = new Vector2(100, 50);
             playerSettings.rectTransform.pivot = new Vector2(0, 1);
             playerSettings.rectTransform.anchoredPosition = new Vector2(-910, 390);
             playerSettingsButton.image = playerSettings;
@@ -741,13 +778,14 @@ namespace Bag_With_Friends
 
             GameObject playerSettingsOb = new GameObject("Player Settings");
             playerSettingsOb.transform.SetParent(playerSettingsButtonOb.transform);
+            playerSettingsOb.transform.localPosition = Vector3.zero;
             Text playerSettingsText = playerSettingsOb.AddComponent<Text>();
             playerSettingsText.font = arial;
-            playerSettingsText.fontSize = 40;
+            playerSettingsText.fontSize = 20;
             playerSettingsText.alignment = TextAnchor.MiddleCenter;
-            playerSettingsText.text = "*";
+            playerSettingsText.text = "player\nsettings";
             playerSettingsText.color = Color.black;
-            playerSettingsText.rectTransform.sizeDelta = new Vector2(50, 50);
+            playerSettingsText.rectTransform.sizeDelta = new Vector2(100, 50);
 
             playerContainer = new GameObject("Players");
             GameObject.DontDestroyOnLoad(playerContainer);
@@ -1082,6 +1120,13 @@ namespace Bag_With_Friends
                     {
                         GameObject.Destroy(playerMenuContainer.transform.GetChild(i));
                     }
+
+                    frozen = false;
+                    PeakSummited[] summiteds = Resources.FindObjectsOfTypeAll<PeakSummited>();
+                    if (summiteds.Length != 0)
+                    {
+                        summiteds[0].DisablePlayerMovement(frozen);
+                    }
                 }
             });
 
@@ -1100,7 +1145,7 @@ namespace Bag_With_Friends
             {
                 string[] splitNam = SceneUtility.GetScenePathByBuildIndex(i).Split('/');
                 string scene = splitNam[splitNam.Length - 1].Split('.')[0];
-                
+
                 GameObject sceneOb = new GameObject("Scene " + scene);
                 sceneOb.transform.SetParent(playerMenuContainer.transform);
                 Image bg = sceneOb.AddComponent<Image>();
@@ -1129,7 +1174,7 @@ namespace Bag_With_Friends
             UnityEngine.UI.Button playerSettingsButton = playerSettingsButtonOb.AddComponent<UnityEngine.UI.Button>();
             Image playerSettings = playerSettingsButtonOb.AddComponent<Image>();
             playerSettings.color = new Color(0.9f, 0.9f, 0.9f, 1);
-            playerSettings.rectTransform.sizeDelta = new Vector2(50, 50);
+            playerSettings.rectTransform.sizeDelta = new Vector2(100, 50);
             playerSettings.rectTransform.pivot = new Vector2(0, 1);
             playerSettings.rectTransform.anchoredPosition = new Vector2(-910, 390);
             playerSettingsButton.image = playerSettings;
@@ -1141,13 +1186,44 @@ namespace Bag_With_Friends
 
             GameObject playerSettingsOb = new GameObject("Player Settings");
             playerSettingsOb.transform.SetParent(playerSettingsButtonOb.transform);
+            playerSettingsOb.transform.localPosition = Vector3.zero;
             Text playerSettingsText = playerSettingsOb.AddComponent<Text>();
             playerSettingsText.font = arial;
-            playerSettingsText.fontSize = 40;
+            playerSettingsText.fontSize = 20;
             playerSettingsText.alignment = TextAnchor.MiddleCenter;
-            playerSettingsText.text = "*";
+            playerSettingsText.text = "player\nsettings";
             playerSettingsText.color = Color.black;
-            playerSettingsText.rectTransform.sizeDelta = new Vector2(50, 50);
+            playerSettingsText.rectTransform.sizeDelta = new Vector2(100, 50);
+
+            GameObject freezePlayersOb = new GameObject("Freeze Players Button");
+            freezePlayersOb.transform.SetParent(roomMenu.transform);
+            freezePlayersOb.transform.localPosition = new Vector3(-650, 350, 0);
+            UnityEngine.UI.Button freezePlayersButton = freezePlayersOb.AddComponent<UnityEngine.UI.Button>();
+            Image freezePlayersBG = freezePlayersOb.AddComponent<Image>();
+            freezePlayersBG.color = new Color(0.9f, 0.9f, 0.9f, 1);
+            freezePlayersBG.rectTransform.sizeDelta = new Vector2(200, 50);
+            freezePlayersBG.rectTransform.pivot = new Vector2(0, 1);
+            freezePlayersButton.image = freezePlayersBG;
+            freezePlayersButton.onClick.AddListener(() =>
+            {
+                ws.Send($"{{\"data\":\"freeze\", \"id\":\"{playerId}\", \"freeze\":{(!frozen).ToString().ToLower()}}}");
+            });
+
+            GameObject freezePlayersTextOb = new GameObject("Freeze Players");
+            freezePlayersTextOb.transform.SetParent(freezePlayersOb.transform);
+            freezePlayersTextOb.transform.localPosition = Vector3.zero;
+            Text freezePlayersText = freezePlayersTextOb.AddComponent<Text>();
+            freezePlayersText.font = arial;
+            freezePlayersText.fontSize = 20;
+            freezePlayersText.alignment = TextAnchor.MiddleCenter;
+            freezePlayersText.text = "freeze\nplayers";
+            freezePlayersText.color = Color.black;
+            freezePlayersText.rectTransform.sizeDelta = new Vector2(200, 50);
+
+            if (compMode || !casterMode)
+            {
+                freezePlayersOb.SetActive(false);
+            }
         }
 
         public void MakePlayerInList(Player player)
@@ -1195,11 +1271,11 @@ namespace Bag_With_Friends
 
             GameObject banButtonOb = new GameObject("Ban Button");
             banButtonOb.transform.SetParent(playerOB.transform);
-            banButtonOb.transform.localPosition = new Vector3(540, 0, 0);
+            banButtonOb.transform.localPosition = new Vector3(605, 0, 0);
             UnityEngine.UI.Button banButton = banButtonOb.AddComponent<UnityEngine.UI.Button>();
             Image banBG = banButtonOb.AddComponent<Image>();
             banBG.color = new Color(1, 1, 1, 0.3f);
-            banBG.rectTransform.sizeDelta = new Vector2(230, 44);
+            banBG.rectTransform.sizeDelta = new Vector2(100, 44);
             banButton.image = banBG;
 
             GameObject banTextOb = new GameObject("banText");
@@ -1210,14 +1286,38 @@ namespace Bag_With_Friends
             banText.fontSize = 40;
             banText.alignment = TextAnchor.MiddleCenter;
             banText.text = "Ban";
-            banText.rectTransform.sizeDelta = new Vector2(230, 44);
+            banText.rectTransform.sizeDelta = new Vector2(100, 44);
 
             banButton.onClick.AddListener(() =>
             {
                 ws.Send($"{{\"data\":\"banPlayer\", \"id\":\"{playerId}\", \"ban\":\"{player.id}\"}}");
             });
-
             banButtonOb.SetActive(amHost);
+
+            GameObject switchButtonOb = new GameObject("Switch Button");
+            switchButtonOb.transform.SetParent(playerOB.transform);
+            switchButtonOb.transform.localPosition = new Vector3(505, 0, 0);
+            UnityEngine.UI.Button switchButton = switchButtonOb.AddComponent<UnityEngine.UI.Button>();
+            Image switchBG = switchButtonOb.AddComponent<Image>();
+            switchBG.color = new Color(1, 1, 1, 0.3f);
+            switchBG.rectTransform.sizeDelta = new Vector2(100, 44);
+            switchButton.image = switchBG;
+
+            GameObject switchTextOb = new GameObject("banText");
+            switchTextOb.transform.SetParent(switchButtonOb.transform);
+            switchTextOb.transform.localPosition = Vector3.zero;
+            Text switchText = switchTextOb.AddComponent<Text>();
+            switchText.font = arial;
+            switchText.fontSize = 20;
+            switchText.alignment = TextAnchor.MiddleCenter;
+            switchText.text = "make\nhost";
+            switchText.rectTransform.sizeDelta = new Vector2(100, 44);
+
+            switchButton.onClick.AddListener(() =>
+            {
+                ws.Send($"{{\"data\":\"switchHost\", \"id\":\"{playerId}\", \"newHost\":\"{player.id}\"}}");
+            });
+            switchButtonOb.SetActive(amHost);
 
             playerOB.transform.localScale = roomMenu.transform.localScale;
             playerListingLookup.Add(player.id, playerOB);
@@ -1257,7 +1357,6 @@ namespace Bag_With_Friends
             {
                 playerColor.r = value;
                 playerColorPreview.color = playerColor;
-                ws.Send($"{{\"data\":\"changeColor\", \"id\":\"{playerId}\", \"color\":[\"{playerColor.r}\", \"{playerColor.g}\", \"{playerColor.b}\", \"{playerColor.a}\"]}}");
             });
 
             GameObject colorGObject = GameObject.Instantiate(sliderSteal);
@@ -1273,7 +1372,6 @@ namespace Bag_With_Friends
             {
                 playerColor.g = value;
                 playerColorPreview.color = playerColor;
-                ws.Send($"{{\"data\":\"changeColor\", \"id\":\"{playerId}\", \"color\":[\"{playerColor.r}\", \"{playerColor.g}\", \"{playerColor.b}\", \"{playerColor.a}\"]}}");
             });
 
             GameObject colorBObject = GameObject.Instantiate(sliderSteal);
@@ -1289,7 +1387,6 @@ namespace Bag_With_Friends
             {
                 playerColor.b = value;
                 playerColorPreview.color = playerColor;
-                ws.Send($"{{\"data\":\"changeColor\", \"id\":\"{playerId}\", \"color\":[\"{playerColor.r}\", \"{playerColor.g}\", \"{playerColor.b}\", \"{playerColor.a}\"]}}");
             });
 
             GameObject colorAObject = GameObject.Instantiate(sliderSteal);
@@ -1305,7 +1402,6 @@ namespace Bag_With_Friends
             {
                 playerColor.a = value;
                 playerColorPreview.color = playerColor;
-                ws.Send($"{{\"data\":\"changeColor\", \"id\":\"{playerId}\", \"color\":[\"{playerColor.r}\", \"{playerColor.g}\", \"{playerColor.b}\", \"{playerColor.a}\"]}}");
             });
 
             // CRAMPONS
@@ -1583,7 +1679,6 @@ namespace Bag_With_Friends
             noPipeButton.onClick.AddListener(() =>
             {
                 GameManager.control.isUsingPipe = false;
-                GameManager.control.smokingpipe = false;
 
                 pipeB = false;
 
@@ -1596,7 +1691,6 @@ namespace Bag_With_Friends
             PipeButton.onClick.AddListener(() =>
             {
                 GameManager.control.isUsingPipe = true;
-                GameManager.control.smokingpipe = true;
 
                 pipeB = true;
 
@@ -1799,6 +1893,12 @@ namespace Bag_With_Friends
 
             if (!connected || lastPing + (inRoom ? 5000 : 15000) < DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) return;
 
+            if (playerColorLast != playerColor)
+            {
+                playerColorLast = playerColor;
+                ws.Send($"{{\"data\":\"changeColor\", \"id\":\"{playerId}\", \"color\":[\"{playerColor.r}\", \"{playerColor.g}\", \"{playerColor.b}\", \"{playerColor.a}\"]}}");
+            }
+
             /*if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > lastPing + 1000)
             {
                 lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -1941,6 +2041,15 @@ namespace Bag_With_Friends
 
             if (Input.GetKeyDown(KeyCode.Tab))
             {
+                if (compMode)
+                {
+                    GameManager.control.crampons = cramponsB;
+                    GameManager.control.cramponsUpgrade = cramponUpgradeB;
+                    GameManager.control.coffee = coffeeB;
+                    GameManager.control.isUsingPipe = pipeB;
+                    GameManager.control.iceAxes = axesB;
+                }
+
                 multiplayerMenuObject.SetActive(true);
                 if (inRoom)
                 {
@@ -2064,7 +2173,6 @@ namespace Bag_With_Friends
                 GameManager.control.cramponsUpgrade = cramponUpgradeB;
                 GameManager.control.coffee = coffeeB;
                 GameManager.control.isUsingPipe = pipeB;
-                GameManager.control.smokingpipe = pipeB;
                 GameManager.control.iceAxes = axesB;
             }
 
@@ -2089,6 +2197,16 @@ namespace Bag_With_Friends
                     player.Yeet(true);
                 }
                 player.UpdateVisual(sceneName);
+            }
+
+            if (casterMode)
+            {
+                StamperPeakSummit[] stampers = Resources.FindObjectsOfTypeAll<StamperPeakSummit>();
+                
+                foreach (StamperPeakSummit stamp in stampers)
+                {
+                    //GameObject.Destroy(stamp.gameObject);
+                }
             }
 
             mePlayerPlayer.scene = sceneName;
@@ -2157,7 +2275,7 @@ namespace Bag_With_Friends
             cacheName = playerName;
 
             lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            ws.Send($"{{\"data\":\"identify\", \"id\":\"{playerId}\", \"name\":\"{playerName}\", \"scene\":\"{SceneManager.GetActiveScene().name}\", \"ping\":{lastPing}, \"major\":{Info.SemanticVersion.Major}, \"minor\":{Info.SemanticVersion.Minor}, \"patch\":{Info.SemanticVersion.Patch}, \"wasConnected\":{wasConnected.ToString().ToLower()}}}");
+            ws.Send($"{{\"data\":\"identify\", \"id\":\"{playerId}\", \"name\":\"{playerName}\", \"CoC\":{(compMode ? 1 : (casterMode ? 2 : 0))}, \"scene\":\"{SceneManager.GetActiveScene().name}\", \"ping\":{lastPing}, \"major\":{Info.SemanticVersion.Major}, \"minor\":{Info.SemanticVersion.Minor}, \"patch\":{Info.SemanticVersion.Patch}, \"wasConnected\":{wasConnected.ToString().ToLower()}}}");
             ws.Send($"{{\"data\":\"getRooms\"}}");
             ws.Send($"{{\"data\":\"changeColor\", \"id\":\"{playerId}\", \"color\":[\"{myColor.r}\", \"{myColor.g}\", \"{myColor.b}\", \"{myColor.a}\"]}}");
             UpdateName(playerName);
@@ -2228,21 +2346,24 @@ namespace Bag_With_Friends
 
         void UpdateName(string name)
         {
-            GameManager manager = GameManager.control;
-
             string newName = "";
 
             if (compMode)
             {
                 newName += "[";
-                newName += !manager.crampons ? 0 : (manager.cramponsUpgrade ? 10 : 6);
+                newName += !GameManager.control.crampons ? 0 : (GameManager.control.cramponsUpgrade ? 10 : 6);
                 newName += "|";
-                newName += manager.coffee ? "Y" : "N";
+                newName += GameManager.control.coffee ? "Y" : "N";
                 newName += "|";
-                newName += manager.isUsingPipe ? "Y" : "N";
+                newName += GameManager.control.isUsingPipe ? "Y" : "N";
                 newName += "|";
-                newName += manager.iceAxes ? "Y" : "N";
+                newName += GameManager.control.iceAxes ? "Y" : "N";
                 newName += "] ";
+            }
+
+            if (casterMode)
+            {
+                newName += "[CASTER] ";
             }
 
             newName += name;

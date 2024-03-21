@@ -260,7 +260,7 @@ namespace Bag_With_Friends
 
             if (player != null)
             {
-                if (color.a >= 0.95)
+                if (color.a >= 0.99)
                 {
                     foreach (SkinnedMeshRenderer skin in bodyMaterials)
                     {
