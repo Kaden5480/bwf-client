@@ -44,7 +44,7 @@ namespace Bag_With_Friends
         string playerName;
         static Player mePlayerPlayer;
         bool amHost = false;
-        bool inRoom = false;
+        static bool inRoom = false;
         bool connected = false;
         bool wasAlive = false;
         bool wasConnected = false;
@@ -54,7 +54,7 @@ namespace Bag_With_Friends
         CursorLockMode mouseOnOpen = CursorLockMode.None;
 
         public static Font arial;
-        bool frozen = false;
+        static bool frozen = false;
 
         GameObject multiplayerMenuObject;
         Canvas multiplayerMenuCanvas;
@@ -122,11 +122,11 @@ namespace Bag_With_Friends
         public List<Player> shadowPrefabRequests = new List<Player>(0);
         public List<Player> bannedPlayers = new List<Player>(0);
 
-        bool cramponsB = false;
-        bool cramponUpgradeB = false;
-        bool coffeeB = false;
-        bool pipeB = false;
-        bool axesB = false;
+        bool cramponsB = true;
+        bool cramponUpgradeB = true;
+        bool coffeeB = true;
+        bool pipeB = true;
+        bool axesB = true;
 
         long lastPing = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         long myPing = 0;
@@ -370,6 +370,7 @@ namespace Bag_With_Friends
                         frozen = (res.GetProperty("freeze").GetUInt64() == 1);
                         if (compMode)
                         {
+                            MakeInfoText($"You were {(frozen ? "" : "un")}frozen!", Color.white);
                             PeakSummited[] summiteds2 = Resources.FindObjectsOfTypeAll<PeakSummited>();
 
                             if (summiteds2.Length != 0)
@@ -381,6 +382,9 @@ namespace Bag_With_Friends
                                 temp2.AddComponent<PeakSummited>().DisablePlayerMovement(frozen);
                                 GameObject.Destroy(temp2);
                             }
+                        } else if (casterMode)
+                        {
+                            MakeInfoText($"Players were {(frozen ? "" : "un")}frozen!", Color.white);
                         }
                         break;
 
@@ -469,6 +473,42 @@ namespace Bag_With_Friends
                     casterMode = true;
                 }
             }
+
+            if (compMode || casterMode)
+            {
+                string str = "";
+                switch (MenuSaveManager.modeSelect)
+                {
+                    case 0:
+                        str = "Mode_Normal/PeaksData_Normal";
+                        break;
+                    case 1:
+                        str = "Mode_YouFallYouDie/PeaksData_YFYD";
+                        break;
+                    case 2:
+                        str = "Mode_FreeSolo/PeaksData_FreeSolo";
+                        break;
+                }
+                string str2 = "";
+                switch (MenuSaveManager.slotFileToUse)
+                {
+                    case 0:
+                        str2 = "_0.es3";
+                        break;
+                    case 1:
+                        str2 = "_1.es3";
+                        break;
+                    case 2:
+                        str2 = "_2.es3";
+                        break;
+                }
+                string text = str + str2;
+                ES3Settings es3Settings = new ES3Settings(text, new Enum[]
+                {
+                    ES3.Location.File
+                });
+                ES3.CopyFile(text, text + ".compBAK", es3Settings, es3Settings);
+            }
         }
 
         IEnumerator MakeShadowPrefab()
@@ -517,6 +557,42 @@ namespace Bag_With_Friends
             if (!connected) return;
             ws.Send($"{{\"data\":\"yeet\", \"id\":\"{playerId}\"}}");
             amHost = false;
+
+            if (compMode || casterMode)
+            {
+                string str = "";
+                switch (MenuSaveManager.modeSelect)
+                {
+                    case 0:
+                        str = "Mode_Normal/PeaksData_Normal";
+                        break;
+                    case 1:
+                        str = "Mode_YouFallYouDie/PeaksData_YFYD";
+                        break;
+                    case 2:
+                        str = "Mode_FreeSolo/PeaksData_FreeSolo";
+                        break;
+                }
+                string str2 = "";
+                switch (MenuSaveManager.slotFileToUse)
+                {
+                    case 0:
+                        str2 = "_0.es3";
+                        break;
+                    case 1:
+                        str2 = "_1.es3";
+                        break;
+                    case 2:
+                        str2 = "_2.es3";
+                        break;
+                }
+                string text = str + str2;
+                ES3Settings es3Settings = new ES3Settings(text, new Enum[]
+                {
+                    ES3.Location.File
+                });
+                ES3.CopyFile(text + ".compBAK", text, es3Settings, es3Settings);
+            }
         }
 
         public void MakeMenu()
@@ -532,6 +608,7 @@ namespace Bag_With_Friends
             CanvasScaler scaler = multiplayerMenuObject.AddComponent<CanvasScaler>();
             scaler.referenceResolution = new Vector2(1920, 1080);
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.matchWidthOrHeight = 1f;
 
             multiplayerRaycaster = multiplayerMenuObject.AddComponent<GraphicRaycaster>();
 
@@ -1909,6 +1986,15 @@ namespace Bag_With_Friends
                 mePlayer.transform.position = spinPos;
             }
 
+            if (compMode && SceneManager.GetActiveScene().name == "Cabin")
+            {
+                GameObject tea = GameObject.Find("teacloth");
+                if (tea != null)
+                {
+                    GameObject.Destroy(tea);
+                }
+            }
+
             if (!connected || lastPing + (inRoom ? 5000 : 15000) < DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) return;
 
             if (playerColorLast != playerColor)
@@ -1943,7 +2029,7 @@ namespace Bag_With_Friends
 
             GetDependencies();
 
-            if (pipeObject != null)
+            if (compMode && pipeObject != null)
             {
                 pipeObject.SetActive(GameManager.control.isUsingPipe && GameManager.control.smokingpipe);
             }
@@ -2143,6 +2229,11 @@ namespace Bag_With_Friends
 
             }
 
+            if ((!compMode && casterMode) && Input.GetKeyDown(KeyCode.Alpha0))
+            {
+                ws.Send($"{{\"data\":\"freeze\", \"id\":\"{playerId}\", \"freeze\":{(!frozen).ToString().ToLower()}}}");
+            }
+
             if (compMode && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > cheatEngineCheck)
             {
                 cheatEngineCheck = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 1000;
@@ -2204,6 +2295,19 @@ namespace Bag_With_Friends
                 {
                     foots[0].Invoke("LoadStemming", 0f);
                 }
+
+                PeakSummited[] summiteds2 = Resources.FindObjectsOfTypeAll<PeakSummited>();
+
+                if (summiteds2.Length != 0)
+                {
+                    summiteds2[0].DisablePlayerMovement(frozen);
+                }
+                else
+                {
+                    GameObject temp2 = new GameObject();
+                    temp2.AddComponent<PeakSummited>().DisablePlayerMovement(frozen);
+                    GameObject.Destroy(temp2);
+                }
             }
 
             if (makingShadowPrefab) return;
@@ -2245,8 +2349,9 @@ namespace Bag_With_Friends
         [HarmonyPatch(typeof(StamperPeakSummit), "StampJournal", new Type[] {})]
         private static class StampPatch
         {
-            private static void Prefix()
+            private static void Postfix()
             {
+                if (!inRoom) return;
                 ws.Send($"{{\"data\":\"summit\", \"id\":\"{playerId}\", \"scene\":\"{mePlayerPlayer.scene}\"}}");
             }
         }
@@ -2257,6 +2362,26 @@ namespace Bag_With_Friends
             private static bool Prefix()
             {
                 return !(compMode || casterMode);
+            }
+        }
+
+        [HarmonyPatch(typeof(InGameMenu), "Resume", new Type[] { })]
+        private static class InGameMenuPatch
+        {
+            private static void PostFix()
+            {
+                PeakSummited[] summiteds2 = Resources.FindObjectsOfTypeAll<PeakSummited>();
+
+                if (summiteds2.Length != 0)
+                {
+                    summiteds2[0].DisablePlayerMovement(frozen);
+                }
+                else
+                {
+                    GameObject temp2 = new GameObject();
+                    temp2.AddComponent<PeakSummited>().DisablePlayerMovement(frozen);
+                    GameObject.Destroy(temp2);
+                }
             }
         }
 
@@ -2276,14 +2401,20 @@ namespace Bag_With_Friends
         {
             private static void Prefix(Pipe __instance)
             {
-                tempPipe = GameManager.control.isUsingPipe;
-                GameManager.control.isUsingPipe = true;
+                if (compMode)
+                {
+                    tempPipe = GameManager.control.isUsingPipe;
+                    GameManager.control.isUsingPipe = true;
+                }
             }
 
             private static void Postfix(Pipe __instance)
             {
-                GameManager.control.isUsingPipe = tempPipe;
-                pipeObject = __instance.gameObject;
+                if (compMode)
+                {
+                    GameManager.control.isUsingPipe = tempPipe;
+                    pipeObject = __instance.gameObject;
+                }
             }
         }
 
