@@ -4,7 +4,6 @@ local function run()
     local extra_libs = {
         ["NETStandard.Library"] = "2.0.3",
         ["System.Memory"]       = "4.5.5",
-        ["System.Text.Json"]    = "8.0.1",
     }
 
     for name, version in pairs(extra_libs) do

@@ -26,6 +26,7 @@ project "BagWithFriends"
     libs = {
         ["LavaGang.MelonLoader"] = "0.6.1",
         ["Lib.Harmony"]          = "2.3.3",
+        ["System.Text.Json"]     = "8.0.1",
         ["WebSocketSharp"]       = "1.0.3-rc11",
     }
 
