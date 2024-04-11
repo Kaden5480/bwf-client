@@ -61,7 +61,7 @@ or by running `winget install Microsoft.DotNet.DesktopRuntime.6` in cmd/powershe
 
 ### MelonLoader
 - Download the latest nightly MelonLoader build
-[here](https://nightly.link/LavaGang/MelonLoader/workflows/build/alpha-development/MelonLoader.Windows.x64.CI.Release).
+[here](https://nightly.link/LavaGang/MelonLoader/workflows/build/alpha-development/MelonLoader.Windows.x64.CI.Release.zip).
 - Extract the contents of the downloaded zip file into your game directory, for example:<br>
   `~/.local/share/Steam/steamapps/common/Peaks of Yore/`
 - Run Peaks of Yore and then quit the game.
