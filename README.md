@@ -170,7 +170,7 @@ or `bin/debug`, depending on which config you selected.
 - Install [git](https://pkgs.org/download/git)
 - Install [nix](https://pkgs.org/download/nix)
 
-### Configuration
+### Building with Nix
 Clone this repository.
 ```sh
 git clone https://github.com/Kaden5480/bwf-client.git
