@@ -1,7 +1,7 @@
 {
     game-dir ? "$HOME/.local/share/Steam/steamapps/common/Peaks of Yore",
     build-system ? "gmake",
-    target ? "release",
+    config ? "release",
 } : let
     pkgs = import <nixpkgs> {};
 in
@@ -22,7 +22,7 @@ in
             printf "${build-system}\n"
 
             if [ "${build-system}" = "gmake" ]; then
-                make config=${target}
+                make config=${config}
             fi
 
             exit
