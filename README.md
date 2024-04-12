@@ -78,7 +78,7 @@ or by running `winget install Microsoft.DotNet.DesktopRuntime.6` in cmd/powershe
 - Extract the contents of the downloaded zip file into the Mods directory which MelonLoader created.
 - Run Peaks of Yore and BWF should be ready to go.
 
-# Building
+# Building from source
 ## Windows build
 ### Prerequisites
 - Install Git (standalone installer) from
