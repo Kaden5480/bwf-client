@@ -42,7 +42,7 @@ or by running `winget install Microsoft.DotNet.DesktopRuntime.6` in cmd/powershe
 - Run Peaks of Yore and BWF should be ready to go.
 
 ## Linux installation
-### System prerequisites
+### Prerequisites
 - Install [protontricks](https://pkgs.org/download/protontricks).
 
 ### Prefix configuration
@@ -119,9 +119,11 @@ a BagWithFriends.csproj and BagWithFriends.sln file.
   if you don't plan on developing the mod, you can choose the "Release" option.
 - Select Build -> Build BagWithFriends (or press ctrl+b).
 - The code should be compiled and you will be able to find the output in `bin/release/`
+  or `bin/debug`, depending on which config you selected.
 
 ## Linux build
 ### Prerequisites
+- Install [git](https://pkgs.org/download/git)
 - Install [premake5](https://pkgs.org/download/premake5)
 - Install [make](https://pkgs.org/download/make)
 - Install [mono](https://pkgs.org/download/mono)
@@ -165,6 +167,7 @@ or `bin/debug`, depending on which config you selected.
 
 ## Linux build with Nix
 ### Prerequisites
+- Install [git](https://pkgs.org/download/git)
 - Install [nix](https://pkgs.org/download/nix)
 
 ### Configuration
