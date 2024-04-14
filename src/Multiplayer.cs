@@ -28,10 +28,10 @@ namespace Bag_With_Friends
 {
     public class Multiplayer : MelonMod
     {
+        private Preferences preferences;
         static MelonLogger.Instance logger;
 
         bool debugMode = false;
-        string server = "bwf.givo.xyz";
         bool moreLogs = false;
         static bool compMode = false;
         static bool casterMode = false;
@@ -142,7 +142,7 @@ namespace Bag_With_Friends
         public void Connect()
         {
             //ws = new WebSocket("ws://bwf.givo.xyz:3000");
-            ws = new WebSocket($"ws://{server}:3000");
+            ws = new WebSocket(this.preferences.GetServer());
             ws.WaitTime = new TimeSpan(0);
 
             ws.OnMessage += (sender, e) =>
@@ -442,6 +442,7 @@ namespace Bag_With_Friends
 
         public override async void OnApplicationStart()
         {
+            this.preferences = new Preferences();
             logger = LoggerInstance;
             thisAssembly = MelonAssembly.Assembly;
 
@@ -457,10 +458,6 @@ namespace Bag_With_Friends
                 {
                     debugMode = true;
                     LoggerInstance.Msg("In debug mode");
-                } else if (args[i] == "-server" && i + 1 < args.Length)
-                {
-                    server = args[i + 1];
-                    LoggerInstance.Msg("Custom server");
                 } else if (args[i] == "-more-logs")
                 {
                     moreLogs = true;
