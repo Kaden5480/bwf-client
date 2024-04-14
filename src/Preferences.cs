@@ -2,7 +2,7 @@ using MelonLoader;
 
 namespace Bag_With_Friends {
     public class Preferences {
-        public MelonPreferences_Category server    { get; }
+        private MelonPreferences_Category server;
         public MelonPreferences_Entry<string> host { get; }
         public MelonPreferences_Entry<int> port    { get; }
 
